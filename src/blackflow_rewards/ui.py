@@ -295,12 +295,17 @@ class ReviewDialog:
                 else ""
             )
         )
-        self.ingots = tk.StringVar(
-            value=(
-                str(self.pending.reward_ingots)
-                if self.pending.reward_ingots is not None
-                else "0"
-            )
+        normal_ingots = self.pending.normal_reward_ingots
+        if (
+            normal_ingots is None
+            and self.pending.unowned_wealth_ingots is None
+        ):
+            normal_ingots = self.pending.reward_ingots
+        self.normal_ingots = tk.StringVar(
+            value=str(normal_ingots or 0)
+        )
+        self.unowned_ingots = tk.StringVar(
+            value=str(self.pending.unowned_wealth_ingots or 0)
         )
         self.hope = tk.StringVar(value="0")
         self.tickets = tk.StringVar(
@@ -353,26 +358,26 @@ class ReviewDialog:
         self._number_pair(
             outer,
             9,
-            "源石锭",
-            self.ingots,
-            "希望",
-            self.hope,
+            "普通源石锭",
+            self.normal_ingots,
+            "无主的财富源石锭",
+            self.unowned_ingots,
         )
         self._number_pair(
             outer,
             10,
+            "希望",
+            self.hope,
             "招募券",
             self.tickets,
-            "收藏品",
-            self.collectibles,
         )
         self._number_pair(
             outer,
             11,
+            "收藏品",
+            self.collectibles,
             "零件",
             self.parts,
-            "",
-            None,
         )
 
         ttk.Separator(outer).grid(
@@ -564,6 +569,14 @@ class ReviewDialog:
                 if self.command_xp.get().strip()
                 else None
             )
+            normal_ingots = self._int(
+                self.normal_ingots.get(),
+                "普通源石锭",
+            )
+            unowned_ingots = self._int(
+                self.unowned_ingots.get(),
+                "无主的财富源石锭",
+            )
             record = RewardRecord(
                 sample_id=self.pending.sample_id,
                 captured_at=self.pending.started_at,
@@ -572,10 +585,9 @@ class ReviewDialog:
                 combat_context=COMBAT_IDS[self.combat.get()],
                 stage_name=self.stage.get().strip(),
                 command_xp=command_xp,
-                originium_ingots=self._int(
-                    self.ingots.get(),
-                    "源石锭",
-                ),
+                originium_ingots=normal_ingots + unowned_ingots,
+                normal_reward_ingots=normal_ingots,
+                unowned_wealth_ingots=unowned_ingots,
                 hope=self._int(self.hope.get(), "希望"),
                 recruitment_tickets=self._int(
                     self.tickets.get(),

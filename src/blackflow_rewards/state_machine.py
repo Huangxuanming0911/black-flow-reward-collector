@@ -99,6 +99,24 @@ class BattleSessionTracker:
             pending.battle_command_xp = observation.battle_command_xp
         if observation.reward_ingots is not None:
             pending.reward_ingots = observation.reward_ingots
+        if observation.normal_reward_ingots is not None:
+            pending.normal_reward_ingots = max(
+                pending.normal_reward_ingots or 0,
+                observation.normal_reward_ingots,
+            )
+        if observation.unowned_wealth_ingots is not None:
+            pending.unowned_wealth_ingots = max(
+                pending.unowned_wealth_ingots or 0,
+                observation.unowned_wealth_ingots,
+            )
+        if (
+            pending.normal_reward_ingots is not None
+            or pending.unowned_wealth_ingots is not None
+        ):
+            pending.reward_ingots = (
+                (pending.normal_reward_ingots or 0)
+                + (pending.unowned_wealth_ingots or 0)
+            )
         if observation.reward_tickets is not None:
             pending.reward_tickets = observation.reward_tickets
         for name in observation.visible_reward_names:

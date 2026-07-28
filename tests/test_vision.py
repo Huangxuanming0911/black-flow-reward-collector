@@ -46,11 +46,29 @@ class VisionRuleTests(unittest.TestCase):
         result = analyze_tokens(tokens)
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_ingots, 3)
+        self.assertEqual(result.normal_reward_ingots, 3)
+        self.assertIsNone(result.unowned_wealth_ingots)
         self.assertEqual(result.reward_tickets, 1)
         self.assertEqual(
             result.visible_reward_names,
             ("源石锭", "术师招募券"),
         )
+
+    def test_normal_and_unowned_wealth_ingots_are_separate(self) -> None:
+        tokens = (
+            token("源石锭", 0.12, 0.47),
+            token("×2", 0.12, 0.57),
+            token("无主的财富", 0.34, 0.39),
+            token("源石锭", 0.34, 0.47),
+            token("×2", 0.34, 0.57),
+            token("收下", 0.12, 0.72),
+            token("收下", 0.34, 0.72),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.normal_reward_ingots, 2)
+        self.assertEqual(result.unowned_wealth_ingots, 2)
+        self.assertEqual(result.reward_ingots, 4)
 
     def test_top_area_title_extracts_floor_and_location(self) -> None:
         tokens = (

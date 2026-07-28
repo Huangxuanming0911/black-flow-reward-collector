@@ -19,6 +19,8 @@ CSV_COLUMNS = (
     "stage_name",
     "command_xp",
     "originium_ingots",
+    "normal_reward_ingots",
+    "unowned_wealth_ingots",
     "hope",
     "recruitment_tickets",
     "collectibles",
@@ -48,6 +50,9 @@ class RewardStore:
         payload = record.to_dict()
         with self.jsonl_path.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        self.rebuild_outputs()
+
+    def rebuild_outputs(self) -> None:
         records = self.read_all()
         self._write_csv(records)
         self._write_summary(records)
@@ -112,6 +117,12 @@ class RewardStore:
                     "sample_count": len(samples),
                     "mean_command_xp": mean("command_xp"),
                     "mean_originium_ingots": mean("originium_ingots"),
+                    "mean_normal_reward_ingots": mean(
+                        "normal_reward_ingots"
+                    ),
+                    "mean_unowned_wealth_ingots": mean(
+                        "unowned_wealth_ingots"
+                    ),
                     "mean_hope": mean("hope"),
                     "mean_recruitment_tickets": mean(
                         "recruitment_tickets"
@@ -123,7 +134,7 @@ class RewardStore:
         self.summary_path.write_text(
             json.dumps(
                 {
-                    "schema_version": "0.1.0",
+                    "schema_version": "0.2.0",
                     "eligible_sample_count": sum(
                         len(samples) for samples in groups.values()
                     ),
@@ -134,4 +145,3 @@ class RewardStore:
             ),
             encoding="utf-8",
         )
-

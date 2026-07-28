@@ -21,6 +21,7 @@ class BattleSessionTrackerTests(unittest.TestCase):
             ScreenKind.REWARDS,
             0.96,
             reward_ingots=3,
+            normal_reward_ingots=3,
             reward_tickets=1,
             visible_reward_names=("源石锭", "术师招募券"),
         )
@@ -42,6 +43,7 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertEqual(completed.stage_name, "趁火打劫")
         self.assertEqual(completed.battle_command_xp, 30)
         self.assertEqual(completed.reward_ingots, 3)
+        self.assertEqual(completed.normal_reward_ingots, 3)
         self.assertEqual(completed.reward_tickets, 1)
         self.assertTrue(completed.saw_rewards)
         self.assertEqual(completed.combat_context, "combat")
@@ -77,6 +79,36 @@ class BattleSessionTrackerTests(unittest.TestCase):
             completed.combat_context,
             "emergency_combat",
         )
+
+    def test_ingot_components_survive_separate_reward_frames(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_ingots=2,
+                normal_reward_ingots=2,
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_ingots=2,
+                unowned_wealth_ingots=2,
+            ),
+            now=1.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.2),
+            now=2.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.normal_reward_ingots, 2)
+        self.assertEqual(completed.unowned_wealth_ingots, 2)
+        self.assertEqual(completed.reward_ingots, 4)
 
 
 if __name__ == "__main__":

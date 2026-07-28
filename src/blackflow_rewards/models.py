@@ -52,6 +52,8 @@ class FrameObservation:
     stage_name: str = ""
     battle_command_xp: int | None = None
     reward_ingots: int | None = None
+    normal_reward_ingots: int | None = None
+    unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
     visible_reward_names: tuple[str, ...] = ()
     source_floor: str = ""
@@ -73,6 +75,8 @@ class PendingBattle:
     stage_name: str = ""
     battle_command_xp: int | None = None
     reward_ingots: int | None = None
+    normal_reward_ingots: int | None = None
+    unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
     visible_reward_names: list[str] = field(default_factory=list)
     ocr_text: list[str] = field(default_factory=list)
@@ -93,6 +97,8 @@ class RewardRecord:
     stage_name: str
     command_xp: int | None
     originium_ingots: int
+    normal_reward_ingots: int
+    unowned_wealth_ingots: int
     hope: int
     recruitment_tickets: int
     collectibles: int
@@ -107,7 +113,7 @@ class RewardRecord:
     ocr_text: str
     reviewer_notes: str
     review_status: str = "confirmed"
-    schema_version: str = "0.1.0"
+    schema_version: str = "0.2.0"
 
     @property
     def eligible_for_base_statistics(self) -> bool:

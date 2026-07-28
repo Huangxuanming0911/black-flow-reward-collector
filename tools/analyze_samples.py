@@ -24,6 +24,10 @@ def main() -> int:
                 "stage_name": result.stage_name,
                 "battle_command_xp": result.battle_command_xp,
                 "reward_ingots": result.reward_ingots,
+                "normal_reward_ingots": result.normal_reward_ingots,
+                "unowned_wealth_ingots": (
+                    result.unowned_wealth_ingots
+                ),
                 "reward_tickets": result.reward_tickets,
                 "visible_reward_names": result.visible_reward_names,
                 "source_floor": result.source_floor,

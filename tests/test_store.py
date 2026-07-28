@@ -20,6 +20,8 @@ def record(sample_id: str, bonus_source: str) -> RewardRecord:
         stage_name="预算否决",
         command_xp=33,
         originium_ingots=4,
+        normal_reward_ingots=2,
+        unowned_wealth_ingots=2,
         hope=0,
         recruitment_tickets=1,
         collectibles=0,
@@ -53,8 +55,15 @@ class RewardStoreTests(unittest.TestCase):
             )
             self.assertEqual(summary["eligible_sample_count"], 1)
             self.assertEqual(summary["groups"][0]["mean_command_xp"], 33.0)
+            self.assertEqual(
+                summary["groups"][0]["mean_normal_reward_ingots"],
+                2.0,
+            )
+            self.assertEqual(
+                summary["groups"][0]["mean_unowned_wealth_ingots"],
+                2.0,
+            )
 
 
 if __name__ == "__main__":
     unittest.main()
-

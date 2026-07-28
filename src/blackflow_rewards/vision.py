@@ -186,26 +186,63 @@ def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _reward_ingots(tokens: tuple[OCRToken, ...]) -> int | None:
+def _reward_ingot_components(
+    tokens: tuple[OCRToken, ...],
+) -> tuple[int | None, int | None, int | None]:
     ingot_tokens = [
         token for token in tokens if "源石锭" in token.text
     ]
     if not ingot_tokens:
-        return None
-    anchor = ingot_tokens[0]
-    numbers: list[tuple[float, int]] = []
-    for token in tokens:
-        compact = token.text.replace(" ", "")
-        match = re.fullmatch(r"[×xX]?(\d{1,3})", compact)
-        if not match:
+        return None, None, None
+    normal = 0
+    unowned = 0
+    found = False
+    wealth_tokens = [
+        token for token in tokens if "无主的财富" in token.text
+    ]
+    for anchor in ingot_tokens:
+        numbers: list[tuple[float, int]] = []
+        for token in tokens:
+            compact = token.text.replace(" ", "")
+            match = re.fullmatch(r"[×xX]?(\d{1,3})", compact)
+            if not match:
+                continue
+            if abs(token.center_x - anchor.center_x) > 0.10:
+                continue
+            if not (
+                anchor.center_y
+                < token.center_y
+                < anchor.center_y + 0.22
+            ):
+                continue
+            numbers.append(
+                (
+                    abs(token.center_y - anchor.center_y),
+                    int(match.group(1)),
+                )
+            )
+        if not numbers:
             continue
-        if abs(token.center_x - anchor.center_x) > 0.10:
-            continue
-        if not (anchor.center_y < token.center_y < anchor.center_y + 0.22):
-            continue
-        distance = abs(token.center_y - anchor.center_y)
-        numbers.append((distance, int(match.group(1))))
-    return min(numbers)[1] if numbers else None
+        quantity = min(numbers)[1]
+        found = True
+        is_unowned = any(
+            abs(token.center_x - anchor.center_x) <= 0.11
+            and 0.03
+            <= anchor.center_y - token.center_y
+            <= 0.18
+            for token in wealth_tokens
+        )
+        if is_unowned:
+            unowned += quantity
+        else:
+            normal += quantity
+    if not found:
+        return None, None, None
+    return (
+        normal + unowned,
+        normal if normal else None,
+        unowned if unowned else None,
+    )
 
 
 def _page_context(
@@ -304,6 +341,12 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
     else:
         confidence = 0.35
     reward_names = _reward_names(tokens) if kind == ScreenKind.REWARDS else ()
+    if kind == ScreenKind.REWARDS:
+        reward_ingots, normal_ingots, unowned_ingots = (
+            _reward_ingot_components(tokens)
+        )
+    else:
+        reward_ingots = normal_ingots = unowned_ingots = None
     source_floor, location_context, combat_context, evidence = (
         _page_context(tokens, kind)
     )
@@ -317,11 +360,9 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
             if kind == ScreenKind.SETTLEMENT
             else None
         ),
-        reward_ingots=(
-            _reward_ingots(tokens)
-            if kind == ScreenKind.REWARDS
-            else None
-        ),
+        reward_ingots=reward_ingots,
+        normal_reward_ingots=normal_ingots,
+        unowned_wealth_ingots=unowned_ingots,
         reward_tickets=(
             sum(name.endswith("招募券") for name in reward_names)
             if kind == ScreenKind.REWARDS
