@@ -4,6 +4,53 @@ from pathlib import Path
 from typing import Any
 
 
+_NON_GAME_WINDOW_MARKERS = (
+    "google chrome",
+    "microsoft edge",
+    "mozilla firefox",
+    "brave",
+    "opera",
+    "战后奖励采集器",
+    "black-flow-reward-collector",
+)
+
+
+def select_game_window(
+    windows: list[Any],
+    window_title: str,
+) -> Any:
+    """Prefer the exact game title over pages mentioning the game."""
+    target = window_title.strip().casefold()
+    matches = [
+        item
+        for item in windows
+        if target in item.window_name.strip().casefold()
+    ]
+    exact = [
+        item
+        for item in matches
+        if item.window_name.strip().casefold() == target
+    ]
+    if len(exact) == 1:
+        return exact[0]
+
+    filtered = [
+        item
+        for item in matches
+        if not any(
+            marker in item.window_name.casefold()
+            for marker in _NON_GAME_WINDOW_MARKERS
+        )
+    ]
+    if len(filtered) == 1:
+        return filtered[0]
+
+    names = [item.window_name for item in matches]
+    raise RuntimeError(
+        f"无法唯一确定游戏窗口 {window_title!r}，候选窗口：{names!r}"
+    )
+
+
 class MaaWindowCapture:
     """Read-only MaaFramework capture source for one PC client window."""
 
@@ -23,19 +70,13 @@ class MaaWindowCapture:
 
         package_root = Path(maa.__file__).resolve().parent
         Library.open(package_root / "bin")
-        windows = [
-            item
-            for item in Toolkit.find_desktop_windows()
-            if window_title.casefold() in item.window_name.casefold()
-        ]
-        if len(windows) != 1:
-            names = [item.window_name for item in windows]
-            raise RuntimeError(
-                f"需要唯一的窗口匹配 {window_title!r}，当前找到：{names!r}"
-            )
-        self.window_name = windows[0].window_name
+        game_window = select_game_window(
+            Toolkit.find_desktop_windows(),
+            window_title,
+        )
+        self.window_name = game_window.window_name
         self.controller: Any = Win32Controller(
-            windows[0].hwnd,
+            game_window.hwnd,
             screencap_method=MaaWin32ScreencapMethodEnum.Background,
             mouse_method=MaaWin32InputMethodEnum.Seize,
             keyboard_method=MaaWin32InputMethodEnum.Seize,
@@ -50,4 +91,3 @@ class MaaWindowCapture:
         if not job.succeeded:
             raise RuntimeError("MaaFramework 截图失败")
         return job.get()
-
