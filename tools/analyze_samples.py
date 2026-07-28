@@ -26,6 +26,10 @@ def main() -> int:
                 "reward_ingots": result.reward_ingots,
                 "reward_tickets": result.reward_tickets,
                 "visible_reward_names": result.visible_reward_names,
+                "source_floor": result.source_floor,
+                "location_context": result.location_context,
+                "combat_context": result.combat_context,
+                "context_evidence": result.context_evidence,
                 "ocr_text": result.raw_text,
             }
         )

@@ -22,6 +22,7 @@ class VisionRuleTests(unittest.TestCase):
             token("成功通过", 0.16, 0.70),
             token("本次作战", 0.66, 0.32),
             token("指挥等级", 0.56, 0.35),
+            token("作战", 0.10, 0.52),
             token("趁火打劫", 0.16, 0.58),
             token("30", 0.65, 0.39),
         )
@@ -29,6 +30,7 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
         self.assertEqual(result.stage_name, "趁火打劫")
         self.assertEqual(result.battle_command_xp, 30)
+        self.assertEqual(result.combat_context, "combat")
 
     def test_reward_text_and_ingot_quantity(self) -> None:
         tokens = (
@@ -49,6 +51,26 @@ class VisionRuleTests(unittest.TestCase):
             result.visible_reward_names,
             ("源石锭", "术师招募券"),
         )
+
+    def test_top_area_title_extracts_floor_and_location(self) -> None:
+        tokens = (
+            token("血色空脉", 0.50, 0.04),
+            token("(III) Yerca", 0.50, 0.08),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.source_floor, "3")
+        self.assertEqual(result.location_context, "main_map")
+
+    def test_hidden_area_is_a_location_not_a_battle_type(self) -> None:
+        tokens = (
+            token("未萌生的摇篮", 0.52, 0.03),
+            token("(??) Feto", 0.52, 0.07),
+            token("紧急作战", 0.20, 0.20),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.location_context, "portal_internal")
+        self.assertEqual(result.combat_context, "emergency_combat")
+        self.assertEqual(result.source_floor, "")
 
     def test_unrelated_text_is_other(self) -> None:
         self.assertEqual(

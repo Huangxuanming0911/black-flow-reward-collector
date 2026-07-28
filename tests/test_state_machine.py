@@ -15,6 +15,7 @@ class BattleSessionTrackerTests(unittest.TestCase):
             0.98,
             stage_name="趁火打劫",
             battle_command_xp=30,
+            combat_context="combat",
         )
         rewards = FrameObservation(
             ScreenKind.REWARDS,
@@ -43,9 +44,40 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertEqual(completed.reward_ingots, 3)
         self.assertEqual(completed.reward_tickets, 1)
         self.assertTrue(completed.saw_rewards)
+        self.assertEqual(completed.combat_context, "combat")
         self.assertIsNone(tracker.offer(other, now=6.0))
+
+    def test_context_seen_before_settlement_is_inherited(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        context = FrameObservation(
+            ScreenKind.OTHER,
+            0.8,
+            source_floor="3",
+            location_context="portal_internal",
+            combat_context="emergency_combat",
+            context_evidence=("roman_floor:III",),
+        )
+        tracker.offer(context, now=0.0)
+        tracker.offer(
+            FrameObservation(ScreenKind.SETTLEMENT, 0.9),
+            now=1.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.2),
+            now=2.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.source_floor, "3")
+        self.assertEqual(
+            completed.location_context,
+            "portal_internal",
+        )
+        self.assertEqual(
+            completed.combat_context,
+            "emergency_combat",
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
-

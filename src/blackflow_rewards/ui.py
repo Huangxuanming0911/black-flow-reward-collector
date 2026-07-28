@@ -207,13 +207,23 @@ class CollectorApp:
         self.root.after(150, self._poll_events)
 
     def _review(self, pending: PendingBattle) -> None:
+        default_location = (
+            LOCATION_NAMES.get(pending.location_context)
+            or self.location_var.get()
+        )
+        default_combat = (
+            COMBAT_NAMES.get(pending.combat_context)
+            or self.combat_var.get()
+        )
         dialog = ReviewDialog(
             self.root,
             pending,
             defaults={
-                "source_floor": self.floor_var.get(),
-                "location_context": self.location_var.get(),
-                "combat_context": self.combat_var.get(),
+                "source_floor": (
+                    pending.source_floor or self.floor_var.get()
+                ),
+                "location_context": default_location,
+                "combat_context": default_combat,
             },
             topmost=self.topmost_var.get(),
         )
@@ -397,10 +407,17 @@ class ReviewDialog:
             wraplength=640,
             foreground="#444444",
         ).grid(row=17, column=0, columnspan=4, sticky="w", pady=(12, 4))
+        evidence = "；".join(self.pending.context_evidence) or "使用手动预设"
+        ttk.Label(
+            outer,
+            text=f"上下文依据：{evidence}",
+            wraplength=640,
+            foreground="#555555",
+        ).grid(row=18, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
         screenshot_frame = ttk.Frame(outer)
         screenshot_frame.grid(
-            row=18,
+            row=19,
             column=0,
             columnspan=4,
             sticky="w",
@@ -418,7 +435,7 @@ class ReviewDialog:
 
         buttons = ttk.Frame(outer)
         buttons.grid(
-            row=19,
+            row=20,
             column=0,
             columnspan=4,
             sticky="e",
@@ -606,4 +623,3 @@ def run_app(project_root: Path) -> None:
         pass
     CollectorApp(root, project_root)
     root.mainloop()
-

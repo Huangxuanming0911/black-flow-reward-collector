@@ -21,6 +21,24 @@ _KNOWN_NON_STAGE_TEXT = {
     "完美的战术",
 }
 
+_AREA_FLOORS = {
+    "玻利瓦尔肤层": "1",
+    "甜美的伤口": "2",
+    "血色空脉": "3",
+    "受害者腐殖": "4",
+    "卡德霍之颅": "5",
+    "源流交汇处": "6",
+}
+
+_ROMAN_FLOORS = {
+    "I": "1",
+    "II": "2",
+    "III": "3",
+    "IV": "4",
+    "V": "5",
+    "VI": "6",
+}
+
 
 def _token_from_raw(
     raw: Any,
@@ -190,6 +208,93 @@ def _reward_ingots(tokens: tuple[OCRToken, ...]) -> int | None:
     return min(numbers)[1] if numbers else None
 
 
+def _page_context(
+    tokens: tuple[OCRToken, ...],
+    kind: ScreenKind,
+) -> tuple[str, str, str, tuple[str, ...]]:
+    source_floor = ""
+    location_context = ""
+    combat_context = ""
+    evidence: list[str] = []
+
+    top_tokens = tuple(
+        token
+        for token in tokens
+        if token.center_y <= 0.18 and 0.28 <= token.center_x <= 0.72
+    )
+    top_text = " ".join(token.text for token in top_tokens)
+    compact_top = top_text.replace(" ", "")
+    for area_name, floor in _AREA_FLOORS.items():
+        if area_name in compact_top:
+            source_floor = floor
+            location_context = "main_map"
+            evidence.append(f"area_title:{area_name}")
+            break
+    if not source_floor:
+        roman_match = re.search(
+            r"[\(（]\s*(VI|IV|III|II|V|I)\s*[\)）]",
+            top_text,
+            flags=re.IGNORECASE,
+        )
+        if roman_match:
+            roman = roman_match.group(1).upper()
+            source_floor = _ROMAN_FLOORS[roman]
+            location_context = "main_map"
+            evidence.append(f"roman_floor:{roman}")
+
+    if (
+        "未萌生的摇篮" in compact_top
+        or re.search(r"[\(（]\s*\?{2}\s*[\)）]", top_text)
+    ):
+        location_context = "portal_internal"
+        evidence.append("portal_internal_title")
+
+    if kind == ScreenKind.SETTLEMENT:
+        context_tokens = tuple(
+            token
+            for token in tokens
+            if token.center_x <= 0.38 and 0.42 <= token.center_y <= 0.72
+        )
+    else:
+        # Pre-battle headers generally live near the top. This avoids treating
+        # unrelated node labels scattered across a map as the selected battle.
+        context_tokens = tuple(
+            token
+            for token in tokens
+            if token.center_y <= 0.28
+        )
+    context_text = "".join(
+        token.text.replace(" ", "") for token in context_tokens
+    )
+    rules = (
+        ("resident_base", ("“居民”据点", "\"居民\"据点", "居民据点")),
+        (
+            "resident_occupied",
+            ("流窜“居民”", "流窜居民", "居民占领"),
+        ),
+        ("encounter", ("狭路相逢",)),
+        ("emergency_combat", ("紧急作战",)),
+        ("boss", ("险路恶敌",)),
+        ("pursuit", ("追猎",)),
+        ("combat", ("作战",)),
+    )
+    for context_id, markers in rules:
+        marker = next(
+            (item for item in markers if item in context_text),
+            None,
+        )
+        if marker is not None:
+            combat_context = context_id
+            evidence.append(f"combat_text:{marker}")
+            break
+    return (
+        source_floor,
+        location_context,
+        combat_context,
+        tuple(evidence),
+    )
+
+
 def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
     kind = classify_tokens(tokens)
     if kind == ScreenKind.SETTLEMENT:
@@ -199,6 +304,9 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
     else:
         confidence = 0.35
     reward_names = _reward_names(tokens) if kind == ScreenKind.REWARDS else ()
+    source_floor, location_context, combat_context, evidence = (
+        _page_context(tokens, kind)
+    )
     return FrameObservation(
         kind=kind,
         confidence=confidence,
@@ -220,6 +328,10 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
             else None
         ),
         visible_reward_names=reward_names,
+        source_floor=source_floor,
+        location_context=location_context,
+        combat_context=combat_context,
+        context_evidence=evidence,
     )
 
 

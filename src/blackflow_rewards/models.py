@@ -54,6 +54,10 @@ class FrameObservation:
     reward_ingots: int | None = None
     reward_tickets: int | None = None
     visible_reward_names: tuple[str, ...] = ()
+    source_floor: str = ""
+    location_context: str = ""
+    combat_context: str = ""
+    context_evidence: tuple[str, ...] = ()
 
     @property
     def raw_text(self) -> str:
@@ -73,6 +77,10 @@ class PendingBattle:
     visible_reward_names: list[str] = field(default_factory=list)
     ocr_text: list[str] = field(default_factory=list)
     saw_rewards: bool = False
+    source_floor: str = ""
+    location_context: str = ""
+    combat_context: str = ""
+    context_evidence: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,4 +122,3 @@ class RewardRecord:
             self.eligible_for_base_statistics
         )
         return payload
-

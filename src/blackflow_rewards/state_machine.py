@@ -18,6 +18,10 @@ class BattleSessionTracker:
         self.finalize_delay_seconds = finalize_delay_seconds
         self.pending: PendingBattle | None = None
         self._last_target_at: float | None = None
+        self._source_floor = ""
+        self._location_context = ""
+        self._combat_context = ""
+        self._context_evidence: list[str] = []
 
     def offer(
         self,
@@ -26,6 +30,7 @@ class BattleSessionTracker:
         now: float | None = None,
     ) -> PendingBattle | None:
         now = time.monotonic() if now is None else now
+        self._remember_context(observation)
         if observation.kind in (
             ScreenKind.SETTLEMENT,
             ScreenKind.REWARDS,
@@ -35,6 +40,10 @@ class BattleSessionTracker:
                 self.pending = PendingBattle(
                     sample_id=new_sample_id(),
                     started_at=datetime.now(UTC).isoformat(),
+                    source_floor=self._source_floor,
+                    location_context=self._location_context,
+                    combat_context=self._combat_context,
+                    context_evidence=list(self._context_evidence),
                 )
             self._merge(observation, screenshot_path)
             return None
@@ -47,6 +56,20 @@ class BattleSessionTracker:
         self.pending = None
         self._last_target_at = None
         return completed
+
+    def _remember_context(
+        self,
+        observation: FrameObservation,
+    ) -> None:
+        if observation.source_floor:
+            self._source_floor = observation.source_floor
+        if observation.location_context:
+            self._location_context = observation.location_context
+        if observation.combat_context:
+            self._combat_context = observation.combat_context
+        for item in observation.context_evidence:
+            if item not in self._context_evidence:
+                self._context_evidence.append(item)
 
     def force_finalize(self) -> PendingBattle | None:
         completed = self.pending
@@ -61,6 +84,15 @@ class BattleSessionTracker:
     ) -> None:
         assert self.pending is not None
         pending = self.pending
+        if observation.source_floor:
+            pending.source_floor = observation.source_floor
+        if observation.location_context:
+            pending.location_context = observation.location_context
+        if observation.combat_context:
+            pending.combat_context = observation.combat_context
+        for item in observation.context_evidence:
+            if item not in pending.context_evidence:
+                pending.context_evidence.append(item)
         if observation.stage_name:
             pending.stage_name = observation.stage_name
         if observation.battle_command_xp is not None:
@@ -86,4 +118,3 @@ class BattleSessionTracker:
         value = str(screenshot_path)
         if value not in target:
             target.append(value)
-
