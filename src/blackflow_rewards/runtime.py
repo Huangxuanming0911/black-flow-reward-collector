@@ -174,7 +174,10 @@ class LiveCollector:
             self._frames.set_error(exc)
 
     def _run(self) -> None:
-        tracker = BattleSessionTracker(finalize_delay_seconds=1.0)
+        # Reward cards are shown one by one and their transition animations
+        # can briefly look like an unrelated screen. Keep the same battle
+        # alive long enough for later ingot/collectible/ticket cards to arrive.
+        tracker = BattleSessionTracker(finalize_delay_seconds=5.0)
         last_observation = FrameObservation(ScreenKind.OTHER, 0.0)
         last_saved_signature: np.ndarray | None = None
         pending_dir: Path | None = None
