@@ -189,10 +189,15 @@ def _battle_command_xp(
     return None
 
 
-def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
+def _reward_ticket_names(
+    tokens: tuple[OCRToken, ...],
+) -> tuple[str, ...]:
     ticket_types: set[str] = set()
     for token in tokens:
-        if not (0.03 <= token.center_x <= 0.75):
+        # Reward rows can extend to a fifth card near the right edge.
+        # "Direct leave" never contains a ticket title, so scanning the
+        # complete card strip is safer than clipping after four cards.
+        if not (0.03 <= token.center_x <= 0.96):
             continue
         if not (0.30 <= token.center_y <= 0.70):
             continue
@@ -214,7 +219,11 @@ def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
         ticket_types.add(
             named_match.group(1) if named_match else compact
         )
-    return len(ticket_types)
+    return tuple(sorted(ticket_types))
+
+
+def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
+    return len(_reward_ticket_names(tokens))
 
 
 def _reward_collectible_count(tokens: tuple[OCRToken, ...]) -> int:
@@ -225,7 +234,7 @@ def _reward_collectible_count(tokens: tuple[OCRToken, ...]) -> int:
         for token in tokens
         if "收下" in token.text
         and 0.62 <= token.center_y <= 0.80
-        and token.center_x <= 0.75
+        and token.center_x <= 0.96
     ]
     count = 0
     for button in take_buttons:
@@ -267,7 +276,7 @@ def _part_grant_effects(
         token
         for token in tokens
         if 0.44 <= token.center_y <= 0.53
-        and 0.04 <= token.center_x <= 0.75
+        and 0.04 <= token.center_x <= 0.96
         and 2 <= len(token.text.replace(" ", "")) <= 12
     ]
     for title in title_tokens:
@@ -306,7 +315,7 @@ def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
         # keeps effect descriptions out of the offered-reward list.
         if not (0.44 <= token.center_y <= 0.53):
             continue
-        if not (0.04 <= token.center_x <= 0.75):
+        if not (0.04 <= token.center_x <= 0.96):
             continue
         if compact in ignored or "收下" in compact:
             continue
@@ -555,6 +564,11 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
             _reward_ticket_count(tokens)
             if kind == ScreenKind.REWARDS
             else None
+        ),
+        reward_ticket_names=(
+            _reward_ticket_names(tokens)
+            if kind == ScreenKind.REWARDS
+            else ()
         ),
         reward_collectibles=(
             _reward_collectible_count(tokens)

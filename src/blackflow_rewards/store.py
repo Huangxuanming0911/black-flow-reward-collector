@@ -123,6 +123,45 @@ class RewardStore:
             )
         return self._replace_records(records)
 
+    def correct_reward_counts(
+        self,
+        sample_id: str,
+        recruitment_tickets: int | None = None,
+        parts: int | None = None,
+        note: str = "",
+    ) -> Path:
+        if recruitment_tickets is None and parts is None:
+            raise ValueError("at least one reward count is required")
+        if recruitment_tickets is not None and recruitment_tickets < 0:
+            raise ValueError("recruitment ticket count cannot be negative")
+        if parts is not None and parts < 0:
+            raise ValueError("part count cannot be negative")
+        records = self.read_all()
+        matches = [
+            payload
+            for payload in records
+            if payload.get("sample_id") == sample_id
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"sample must exist exactly once; found "
+                f"{len(matches)}: {sample_id}"
+            )
+        payload = matches[0]
+        if recruitment_tickets is not None:
+            payload["recruitment_tickets"] = recruitment_tickets
+        if parts is not None:
+            payload["parts"] = parts
+            bonus_parts = int(payload.get("bonus_parts") or 0)
+            payload["parts_total"] = parts + bonus_parts
+        payload["schema_version"] = "0.3.0"
+        if note:
+            old_notes = str(payload.get("reviewer_notes", "")).strip()
+            payload["reviewer_notes"] = (
+                f"{old_notes}；{note}" if old_notes else note
+            )
+        return self._replace_records(records)
+
     def _replace_records(
         self,
         records: list[dict[str, Any]],

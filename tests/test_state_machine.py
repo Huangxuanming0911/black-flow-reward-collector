@@ -132,6 +132,38 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertEqual(completed.reward_collectibles, 1)
         self.assertEqual(completed.reward_parts, 2)
 
+    def test_distinct_tickets_are_unioned_across_reward_frames(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=1,
+                reward_ticket_names=("重装招募券",),
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=1,
+                reward_ticket_names=("远程协议招募券",),
+            ),
+            now=1.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.2),
+            now=2.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.reward_tickets, 2)
+        self.assertEqual(
+            completed.reward_ticket_names,
+            ["重装招募券", "远程协议招募券"],
+        )
+
     def test_collectible_part_grant_is_separate_from_node_parts(self) -> None:
         tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
         tracker.offer(

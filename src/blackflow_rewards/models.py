@@ -55,6 +55,7 @@ class FrameObservation:
     normal_reward_ingots: int | None = None
     unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
+    reward_ticket_names: tuple[str, ...] = ()
     reward_collectibles: int | None = None
     parts_box_used: int | None = None
     part_grant_effects: tuple[tuple[str, int], ...] = ()
@@ -81,6 +82,7 @@ class PendingBattle:
     normal_reward_ingots: int | None = None
     unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
+    reward_ticket_names: list[str] = field(default_factory=list)
     reward_collectibles: int | None = None
     parts_box_start: int | None = None
     parts_box_end: int | None = None

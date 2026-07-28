@@ -31,7 +31,20 @@ class FrameBufferTests(unittest.TestCase):
         for index in range(5):
             buffer.put(frame(index), burst=True)
         self.assertEqual(len(buffer), 4)
-        self.assertEqual(buffer.get(0.0).epoch_ms, 1)
+        self.assertEqual(buffer.get(0.0).epoch_ms, 0)
+
+    def test_burst_mode_preserves_large_visual_transition(self) -> None:
+        buffer = FrameBuffer(normal_limit=2, burst_limit=4)
+        for index in (0, 1, 2, 50, 51):
+            buffer.put(frame(index), burst=True)
+        retained = [
+            buffer.get(0.0).epoch_ms
+            for _ in range(4)
+        ]
+        self.assertEqual(retained[0], 0)
+        self.assertIn(2, retained)
+        self.assertIn(50, retained)
+        self.assertEqual(retained[-1], 51)
 
 
 if __name__ == "__main__":

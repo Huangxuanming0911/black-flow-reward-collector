@@ -54,10 +54,39 @@ class FrameBuffer:
     def put(self, item: CapturedFrame, burst: bool) -> None:
         limit = self.burst_limit if burst else self.normal_limit
         with self._condition:
-            while len(self._items) >= limit:
-                self._items.popleft()
             self._items.append(item)
+            while len(self._items) > limit:
+                if burst and len(self._items) > 2:
+                    self._drop_least_distinct_interior()
+                else:
+                    self._items.popleft()
             self._condition.notify()
+
+    def _drop_least_distinct_interior(self) -> None:
+        """Compact animation frames without deleting visual transitions.
+
+        In burst mode OCR is much slower than capture. Dropping the oldest
+        frame loses short-lived reward cards; instead, remove the interior
+        frame whose two adjacent visual changes are smallest. The first
+        pending frame, newest frame, and both sides of large transitions are
+        consequently retained.
+        """
+        items = list(self._items)
+        remove_at = min(
+            range(1, len(items) - 1),
+            key=lambda index: max(
+                signature_difference(
+                    items[index - 1].signature,
+                    items[index].signature,
+                ),
+                signature_difference(
+                    items[index].signature,
+                    items[index + 1].signature,
+                ),
+            ),
+        )
+        del items[remove_at]
+        self._items = deque(items)
 
     def get(self, timeout: float) -> CapturedFrame | None:
         deadline = time.monotonic() + timeout

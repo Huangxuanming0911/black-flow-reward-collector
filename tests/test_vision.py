@@ -132,6 +132,18 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_tickets, 2)
 
+    def test_fifth_reward_card_ticket_is_not_clipped(self) -> None:
+        tokens = (
+            token("重装招募券", 0.84, 0.52),
+            token("收下", 0.84, 0.72),
+            token("直接离开", 0.96, 0.57),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_tickets, 1)
+        self.assertEqual(result.reward_ticket_names, ("重装招募券",))
+        self.assertIn("重装招募券", result.visible_reward_names)
+
     def test_direct_collectible_and_parts_box_are_read(self) -> None:
         tokens = (
             token("残破合影", 0.30, 0.49),

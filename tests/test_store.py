@@ -116,7 +116,27 @@ class RewardStoreTests(unittest.TestCase):
             group = summary["groups"][0]
             self.assertEqual(group["mean_parts"], 1.0)
             self.assertEqual(group["mean_bonus_parts"], 3.0)
-            self.assertEqual(group["mean_total_parts"], 4.0)
+        self.assertEqual(group["mean_total_parts"], 4.0)
+
+    def test_correct_reward_counts_rebuilds_outputs(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = RewardStore(Path(directory))
+            store.append(record("sample-1", "none"))
+            backup = store.correct_reward_counts(
+                "sample-1",
+                recruitment_tickets=2,
+                parts=2,
+                note="人工复核补记",
+            )
+            self.assertTrue(backup.exists())
+            corrected = store.read_all()[0]
+            self.assertEqual(corrected["recruitment_tickets"], 2)
+            self.assertEqual(corrected["parts"], 2)
+            self.assertEqual(corrected["parts_total"], 2)
+            self.assertIn(
+                "人工复核补记",
+                corrected["reviewer_notes"],
+            )
 
 
 if __name__ == "__main__":

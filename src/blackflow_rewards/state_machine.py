@@ -178,6 +178,14 @@ class BattleSessionTracker:
                 pending.reward_tickets or 0,
                 observation.reward_tickets,
             )
+        for name in observation.reward_ticket_names:
+            if name not in pending.reward_ticket_names:
+                pending.reward_ticket_names.append(name)
+        if pending.reward_ticket_names:
+            pending.reward_tickets = max(
+                pending.reward_tickets or 0,
+                len(pending.reward_ticket_names),
+            )
         if observation.reward_collectibles is not None:
             pending.reward_collectibles = max(
                 pending.reward_collectibles or 0,

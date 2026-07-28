@@ -13,6 +13,7 @@ def main() -> None:
     parser.add_argument("sample_id")
     parser.add_argument("--combat-context")
     parser.add_argument("--parts", type=int)
+    parser.add_argument("--recruitment-tickets", type=int)
     parser.add_argument("--bonus-parts", type=int)
     parser.add_argument("--parts-bonus-details", default="")
     parser.add_argument("--note", default="")
@@ -39,16 +40,31 @@ def main() -> None:
             args.parts_bonus_details,
             args.note,
         )
+    elif args.recruitment_tickets is not None or args.parts is not None:
+        backup = store.correct_reward_counts(
+            args.sample_id,
+            recruitment_tickets=args.recruitment_tickets,
+            parts=args.parts,
+            note=args.note,
+        )
     else:
         parser.error(
-            "provide --combat-context, or both --parts and --bonus-parts"
+            "provide --combat-context, --recruitment-tickets, --parts, "
+            "or both --parts and --bonus-parts"
         )
     print(f"corrected={args.sample_id}")
     if args.combat_context:
         print(f"combat_context={args.combat_context}")
-    else:
+    elif args.parts is not None and args.bonus_parts is not None:
         print(f"parts={args.parts}")
         print(f"bonus_parts={args.bonus_parts}")
+    else:
+        if args.recruitment_tickets is not None:
+            print(
+                f"recruitment_tickets={args.recruitment_tickets}"
+            )
+        if args.parts is not None:
+            print(f"parts={args.parts}")
     print(f"backup={backup}")
 
 
