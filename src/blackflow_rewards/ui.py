@@ -417,9 +417,16 @@ class ReviewDialog:
             foreground="#444444",
         ).grid(row=17, column=0, columnspan=4, sticky="w", pady=(12, 4))
         evidence = "；".join(self.pending.context_evidence) or "使用手动预设"
+        automatic_type = COMBAT_NAMES.get(
+            self.pending.combat_context,
+            "未自动识别",
+        )
         ttk.Label(
             outer,
-            text=f"上下文依据：{evidence}",
+            text=(
+                f"自动节点类型：{automatic_type}；"
+                f"识别依据：{evidence}"
+            ),
             wraplength=640,
             foreground="#555555",
         ).grid(row=18, column=0, columnspan=4, sticky="w", pady=(0, 4))

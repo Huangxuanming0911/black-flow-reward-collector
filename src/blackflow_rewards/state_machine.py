@@ -14,8 +14,13 @@ def new_sample_id() -> str:
 
 
 class BattleSessionTracker:
-    def __init__(self, finalize_delay_seconds: float = 2.5) -> None:
+    def __init__(
+        self,
+        finalize_delay_seconds: float = 2.5,
+        settlement_grace_seconds: float = 30.0,
+    ) -> None:
         self.finalize_delay_seconds = finalize_delay_seconds
+        self.settlement_grace_seconds = settlement_grace_seconds
         self.pending: PendingBattle | None = None
         self._last_target_at: float | None = None
         self._source_floor = ""
@@ -50,7 +55,12 @@ class BattleSessionTracker:
 
         if self.pending is None or self._last_target_at is None:
             return None
-        if now - self._last_target_at < self.finalize_delay_seconds:
+        required_delay = (
+            self.finalize_delay_seconds
+            if self.pending.saw_rewards
+            else self.settlement_grace_seconds
+        )
+        if now - self._last_target_at < required_delay:
             return None
         completed = self.pending
         self.pending = None

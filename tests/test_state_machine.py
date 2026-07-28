@@ -60,7 +60,10 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertIsNone(tracker.offer(other, now=6.0))
 
     def test_context_seen_before_settlement_is_inherited(self) -> None:
-        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker = BattleSessionTracker(
+            finalize_delay_seconds=0.0,
+            settlement_grace_seconds=0.0,
+        )
         context = FrameObservation(
             ScreenKind.OTHER,
             0.8,
@@ -128,6 +131,57 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertEqual(completed.reward_tickets, 1)
         self.assertEqual(completed.reward_collectibles, 1)
         self.assertEqual(completed.reward_parts, 2)
+
+    def test_settlement_waits_through_upgrade_pages_for_rewards(self) -> None:
+        tracker = BattleSessionTracker(
+            finalize_delay_seconds=1.0,
+            settlement_grace_seconds=30.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.SETTLEMENT,
+                0.98,
+                stage_name="本性难移",
+                battle_command_xp=21,
+                combat_context="combat",
+            ),
+            Path("settlement.jpg"),
+            now=0.0,
+        )
+        self.assertIsNone(
+            tracker.offer(
+                FrameObservation(ScreenKind.OTHER, 0.3),
+                now=8.0,
+            )
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=1,
+                visible_reward_names=("先锋招募券",),
+            ),
+            Path("rewards.jpg"),
+            now=9.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.3),
+            now=10.1,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.stage_name, "本性难移")
+        self.assertEqual(completed.battle_command_xp, 21)
+        self.assertEqual(completed.combat_context, "combat")
+        self.assertEqual(completed.reward_tickets, 1)
+        self.assertEqual(
+            completed.settlement_screenshots,
+            ["settlement.jpg"],
+        )
+        self.assertEqual(
+            completed.reward_screenshots,
+            ["rewards.jpg"],
+        )
 
 
 if __name__ == "__main__":

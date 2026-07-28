@@ -17,13 +17,17 @@ from blackflow_rewards.ui import (
 from blackflow_rewards.vision import FrameAnalyzer
 
 
-def load_session(directory: Path) -> PendingBattle:
+def load_sessions(directories: list[Path]) -> PendingBattle:
     paths = sorted(
-        directory.glob("*.jpg"),
+        (
+            path
+            for directory in directories
+            for path in directory.glob("*.jpg")
+        ),
         key=lambda path: path.stat().st_mtime,
     )
     if not paths:
-        raise RuntimeError(f"目录中没有证据截图：{directory}")
+        raise RuntimeError("所选目录中没有证据截图")
     analyzer = FrameAnalyzer()
     tracker = BattleSessionTracker()
     for index, path in enumerate(paths):
@@ -36,7 +40,7 @@ def load_session(directory: Path) -> PendingBattle:
     pending = tracker.force_finalize()
     if pending is None:
         raise RuntimeError("截图中没有识别到结算页或奖励页")
-    pending.sample_id = f"{directory.name}-recovered"
+    pending.sample_id = f"{directories[0].name}-recovered"
     pending.started_at = datetime.fromtimestamp(
         min(path.stat().st_mtime for path in paths),
         tz=UTC,
@@ -44,18 +48,24 @@ def load_session(directory: Path) -> PendingBattle:
     return pending
 
 
+def load_session(directory: Path) -> PendingBattle:
+    return load_sessions([directory])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Review a saved settlement/reward screenshot session."
     )
-    parser.add_argument("directory", type=Path)
+    parser.add_argument("directories", type=Path, nargs="+")
     parser.add_argument(
         "--project-root",
         type=Path,
         default=Path.cwd(),
     )
     args = parser.parse_args()
-    pending = load_session(args.directory.resolve())
+    pending = load_sessions(
+        [directory.resolve() for directory in args.directories]
+    )
 
     root = tk.Tk()
     root.withdraw()
