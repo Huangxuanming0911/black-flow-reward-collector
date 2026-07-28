@@ -46,6 +46,21 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
         self.assertEqual(result.battle_command_xp, 14)
 
+    def test_command_xp_supports_lower_16_by_9_layout(self) -> None:
+        tokens = (
+            token("成功通过", 0.12, 0.79),
+            token("本次作战", 0.75, 0.36),
+            token("护盾值", 0.65, 0.36),
+            token("2", 0.65, 0.42),
+            token("指挥等级", 0.54, 0.515),
+            token("本次作战", 0.66, 0.515),
+            token("21/55", 0.55, 0.58),
+            token("15", 0.666, 0.576),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
+        self.assertEqual(result.battle_command_xp, 15)
+
     def test_animating_settlement_does_not_use_shield_as_xp(self) -> None:
         tokens = (
             token("成功通过", 0.12, 0.79),

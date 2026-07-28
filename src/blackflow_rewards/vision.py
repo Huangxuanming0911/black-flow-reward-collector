@@ -158,7 +158,7 @@ def _battle_command_xp(
         token
         for token in tokens
         if "本次作战" in token.text
-        and 0.33 <= token.center_y <= 0.50
+        and 0.30 <= token.center_y <= 0.62
         and any(
             label.center_x < token.center_x
             and abs(label.center_y - token.center_y) <= 0.04
