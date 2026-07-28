@@ -54,7 +54,7 @@ class LiveCollector:
         try:
             capture = MaaWindowCapture(self.window_title)
             analyzer = FrameAnalyzer()
-            tracker = BattleSessionTracker()
+            tracker = BattleSessionTracker(finalize_delay_seconds=1.0)
             self.events.put(
                 ("status", f"已只读连接：{capture.window_name}")
             )

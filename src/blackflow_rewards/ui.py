@@ -150,7 +150,7 @@ class CollectorApp:
         ttk.Label(
             status,
             text=(
-                "提示：出现奖励页时正常领取；离开奖励页约 2.5 秒后"
+                "提示：出现奖励页时正常领取；识别到离开奖励页后约 1 秒"
                 "自动弹出确认窗口。"
             ),
             foreground="#555555",

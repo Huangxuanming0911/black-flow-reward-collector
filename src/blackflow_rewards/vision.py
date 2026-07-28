@@ -384,7 +384,11 @@ class FrameAnalyzer:
         if self._ocr_engine is None:
             from rapidocr_onnxruntime import RapidOCR
 
-            self._ocr_engine = RapidOCR()
+            # Avoid occupying every logical CPU while the game is running.
+            self._ocr_engine = RapidOCR(
+                intra_op_num_threads=4,
+                inter_op_num_threads=1,
+            )
         return self._ocr_engine
 
     def analyze(self, image: np.ndarray) -> FrameObservation:

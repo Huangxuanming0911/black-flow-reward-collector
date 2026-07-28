@@ -77,9 +77,12 @@ class MaaWindowCapture:
         self.window_name = game_window.window_name
         self.controller: Any = Win32Controller(
             game_window.hwnd,
-            screencap_method=MaaWin32ScreencapMethodEnum.Background,
-            mouse_method=MaaWin32InputMethodEnum.Seize,
-            keyboard_method=MaaWin32InputMethodEnum.Seize,
+            # FramePool avoids the repeated PrintWindow fallback that can
+            # briefly stall a hardware-accelerated game window.
+            screencap_method=MaaWin32ScreencapMethodEnum.FramePool,
+            # This collector never sends input, so do not install input hooks.
+            mouse_method=MaaWin32InputMethodEnum.PostMessage,
+            keyboard_method=MaaWin32InputMethodEnum.PostMessage,
         )
         self.controller.set_screenshot_target_long_side(target_long_side)
         connection = self.controller.post_connection().wait()
