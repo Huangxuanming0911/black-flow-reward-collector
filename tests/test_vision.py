@@ -175,6 +175,21 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.source_floor, "3")
         self.assertEqual(result.location_context, "main_map")
 
+    def test_action_point_hud_marks_interactive_main_map(self) -> None:
+        result = analyze_tokens(
+            (
+                token("行动力", 0.92, 0.145),
+                token("4", 0.91, 0.196),
+                token("零件箱", 0.65, 0.925),
+            )
+        )
+        self.assertEqual(result.kind, ScreenKind.OTHER)
+        self.assertEqual(result.location_context, "main_map")
+        self.assertIn(
+            "main_map_hud:action_points",
+            result.context_evidence,
+        )
+
     def test_hidden_area_is_a_location_not_a_battle_type(self) -> None:
         tokens = (
             token("未萌生的摇篮", 0.52, 0.03),

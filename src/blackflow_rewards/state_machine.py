@@ -18,11 +18,14 @@ class BattleSessionTracker:
         self,
         finalize_delay_seconds: float = 2.5,
         settlement_grace_seconds: float = 30.0,
+        map_return_delay_seconds: float = 1.0,
     ) -> None:
         self.finalize_delay_seconds = finalize_delay_seconds
         self.settlement_grace_seconds = settlement_grace_seconds
+        self.map_return_delay_seconds = map_return_delay_seconds
         self.pending: PendingBattle | None = None
         self._last_target_at: float | None = None
+        self._map_returned_at: float | None = None
         self._source_floor = ""
         self._location_context = ""
         self._combat_context = ""
@@ -41,6 +44,7 @@ class BattleSessionTracker:
             ScreenKind.REWARDS,
         ):
             self._last_target_at = now
+            self._map_returned_at = None
             if self.pending is None:
                 self.pending = PendingBattle(
                     sample_id=new_sample_id(),
@@ -55,6 +59,21 @@ class BattleSessionTracker:
 
         if self.pending is None or self._last_target_at is None:
             return None
+        returned_to_map = (
+            self.pending.saw_rewards
+            and "main_map_hud:action_points"
+            in observation.context_evidence
+        )
+        if returned_to_map:
+            if self._map_returned_at is None:
+                self._map_returned_at = now
+                return None
+            if (
+                now - self._map_returned_at
+                < self.map_return_delay_seconds
+            ):
+                return None
+            return self._complete()
         required_delay = (
             self.finalize_delay_seconds
             if self.pending.saw_rewards
@@ -62,9 +81,14 @@ class BattleSessionTracker:
         )
         if now - self._last_target_at < required_delay:
             return None
+        return self._complete()
+
+    def _complete(self) -> PendingBattle:
+        assert self.pending is not None
         completed = self.pending
         self.pending = None
         self._last_target_at = None
+        self._map_returned_at = None
         return completed
 
     def _remember_context(
@@ -85,6 +109,7 @@ class BattleSessionTracker:
         completed = self.pending
         self.pending = None
         self._last_target_at = None
+        self._map_returned_at = None
         return completed
 
     def _merge(

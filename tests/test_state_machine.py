@@ -183,6 +183,54 @@ class BattleSessionTrackerTests(unittest.TestCase):
             ["rewards.jpg"],
         )
 
+    def test_return_to_map_finishes_one_second_after_rewards(self) -> None:
+        tracker = BattleSessionTracker(
+            finalize_delay_seconds=5.0,
+            map_return_delay_seconds=1.0,
+        )
+        tracker.offer(
+            FrameObservation(ScreenKind.SETTLEMENT, 0.98),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=1,
+            ),
+            now=1.0,
+        )
+        returned_map = FrameObservation(
+            ScreenKind.OTHER,
+            0.8,
+            location_context="main_map",
+            context_evidence=("main_map_hud:action_points",),
+        )
+        self.assertIsNone(tracker.offer(returned_map, now=2.0))
+        self.assertIsNone(tracker.offer(returned_map, now=2.9))
+        completed = tracker.offer(returned_map, now=3.1)
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.reward_tickets, 1)
+
+    def test_map_before_rewards_keeps_settlement_grace(self) -> None:
+        tracker = BattleSessionTracker(
+            settlement_grace_seconds=30.0,
+            map_return_delay_seconds=1.0,
+        )
+        tracker.offer(
+            FrameObservation(ScreenKind.SETTLEMENT, 0.98),
+            now=0.0,
+        )
+        returned_map = FrameObservation(
+            ScreenKind.OTHER,
+            0.8,
+            location_context="main_map",
+            context_evidence=("main_map_hud:action_points",),
+        )
+        self.assertIsNone(tracker.offer(returned_map, now=2.0))
+        self.assertIsNone(tracker.offer(returned_map, now=3.1))
+
 
 if __name__ == "__main__":
     unittest.main()

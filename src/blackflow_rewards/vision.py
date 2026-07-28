@@ -393,6 +393,18 @@ def _page_context(
         location_context = "portal_internal"
         evidence.append("portal_internal_title")
 
+    # The top-right action-point label is visible on the interactive map but
+    # not on settlement or reward-card overlays. It is therefore stronger
+    # return-to-map evidence than the area title and persistent bottom HUD.
+    if kind == ScreenKind.OTHER and any(
+        "行动力" in token.text.replace(" ", "")
+        and token.center_x >= 0.78
+        and 0.05 <= token.center_y <= 0.30
+        for token in tokens
+    ):
+        location_context = "main_map"
+        evidence.append("main_map_hud:action_points")
+
     if kind == ScreenKind.SETTLEMENT:
         context_tokens = tuple(
             token
