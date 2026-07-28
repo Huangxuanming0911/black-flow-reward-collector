@@ -128,6 +128,32 @@ def _stage_name(tokens: tuple[OCRToken, ...]) -> str:
 def _battle_command_xp(
     tokens: tuple[OCRToken, ...],
 ) -> int | None:
+    anchors = [
+        token
+        for token in tokens
+        if "本次作战" in token.text
+    ]
+    if anchors:
+        # The lower "本次作战" label belongs to command XP; the upper one
+        # belongs to leak count. Anchor-relative reading avoids shield values.
+        anchor = max(anchors, key=lambda token: token.center_y)
+        anchored_values: list[tuple[float, int]] = []
+        for token in tokens:
+            compact = token.text.replace(" ", "")
+            match = re.fullmatch(r"(\d{1,3})", compact)
+            if not match:
+                continue
+            if abs(token.center_x - anchor.center_x) > 0.12:
+                continue
+            vertical_distance = token.center_y - anchor.center_y
+            if not (0.02 <= vertical_distance <= 0.14):
+                continue
+            anchored_values.append(
+                (vertical_distance, int(match.group(1)))
+            )
+        if anchored_values:
+            return min(anchored_values)[1]
+
     values: list[tuple[float, int]] = []
     for token in tokens:
         compact = token.text.replace(" ", "")

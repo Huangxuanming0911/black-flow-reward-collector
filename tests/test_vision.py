@@ -32,6 +32,20 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.battle_command_xp, 30)
         self.assertEqual(result.combat_context, "combat")
 
+    def test_command_xp_uses_lower_battle_anchor_not_shield(self) -> None:
+        tokens = (
+            token("成功通过", 0.12, 0.79),
+            token("本次作战", 0.75, 0.24),
+            token("护盾值", 0.65, 0.24),
+            token("2", 0.65, 0.30),
+            token("本次作战", 0.66, 0.39),
+            token("14", 0.67, 0.45),
+            token("指挥等级", 0.54, 0.39),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
+        self.assertEqual(result.battle_command_xp, 14)
+
     def test_reward_text_and_ingot_quantity(self) -> None:
         tokens = (
             token("源石锭", 0.15, 0.47),
