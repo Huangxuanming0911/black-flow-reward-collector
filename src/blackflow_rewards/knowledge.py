@@ -6,3 +6,10 @@ from __future__ import annotations
 KNOWN_COLLECTIBLE_PART_GRANTS: dict[str, int] = {
     "囊中骨": 3,
 }
+
+
+# Only fixed node-specific stages belong here. Normal and emergency variants
+# often share stage names, so they must continue to rely on UI context.
+KNOWN_STAGE_CONTEXTS: dict[str, str] = {
+    "共斗": "encounter",
+}

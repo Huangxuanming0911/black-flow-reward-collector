@@ -120,6 +120,18 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_tickets, 1)
 
+    def test_distinct_protocol_tickets_are_counted_separately(self) -> None:
+        tokens = (
+            token("破坏协议招募券", 0.24, 0.49),
+            token("远程协议招募券", 0.48, 0.49),
+            token("收下", 0.24, 0.72),
+            token("收下", 0.48, 0.72),
+            token("直接离开", 0.82, 0.57),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_tickets, 2)
+
     def test_direct_collectible_and_parts_box_are_read(self) -> None:
         tokens = (
             token("残破合影", 0.30, 0.49),
@@ -180,6 +192,35 @@ class VisionRuleTests(unittest.TestCase):
         result = analyze_tokens(tokens)
         self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
         self.assertEqual(result.combat_context, "resident_occupied")
+
+    def test_pursuit_status_on_map_is_not_a_node_type(self) -> None:
+        result = analyze_tokens(
+            (
+                token("追猎", 0.50, 0.12),
+                token("行动力", 0.92, 0.145),
+            )
+        )
+        self.assertEqual(result.kind, ScreenKind.OTHER)
+        self.assertEqual(result.combat_context, "")
+        self.assertIn("forced_state:pursuit", result.context_evidence)
+
+    def test_known_encounter_stage_overrides_generic_combat(self) -> None:
+        result = analyze_tokens(
+            (
+                token("成功通过", 0.12, 0.79),
+                token("指挥等级", 0.54, 0.515),
+                token("本次作战", 0.66, 0.515),
+                token("作战", 0.08, 0.64),
+                token("共斗", 0.08, 0.69),
+            )
+        )
+        self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
+        self.assertEqual(result.stage_name, "共斗")
+        self.assertEqual(result.combat_context, "encounter")
+        self.assertIn(
+            "stage_context:共斗",
+            result.context_evidence,
+        )
 
     def test_top_area_title_extracts_floor_and_location(self) -> None:
         tokens = (

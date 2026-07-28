@@ -7,6 +7,7 @@ from typing import Any
 import cv2
 import numpy as np
 
+from .knowledge import KNOWN_STAGE_CONTEXTS
 from .models import FrameObservation, OCRToken, ScreenKind
 
 
@@ -198,12 +199,21 @@ def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
         compact = token.text.replace(" ", "").replace("卷", "券")
         if "招募券" not in compact:
             continue
-        match = re.search(
-            r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)?"
+        known_match = re.search(
+            r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)"
             r"招募券",
             compact,
         )
-        ticket_types.add(match.group(0) if match else compact)
+        if known_match:
+            ticket_types.add(known_match.group(0))
+            continue
+        named_match = re.search(
+            r"([\u4e00-\u9fff]{1,10}招募券)",
+            compact,
+        )
+        ticket_types.add(
+            named_match.group(1) if named_match else compact
+        )
     return len(ticket_types)
 
 
@@ -464,7 +474,7 @@ def _page_context(
             combat_context,
             tuple(evidence),
         )
-    rules = (
+    rules: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("resident_base", ("“居民”据点", "\"居民\"据点", "居民据点")),
         (
             "resident_occupied",
@@ -473,9 +483,18 @@ def _page_context(
         ("encounter", ("狭路相逢",)),
         ("emergency_combat", ("紧急作战",)),
         ("boss", ("险路恶敌",)),
-        ("pursuit", ("追猎",)),
         ("combat", ("作战",)),
     )
+    if kind == ScreenKind.SETTLEMENT:
+        rules = (
+            ("pursuit", ("追猎",)),
+            *rules,
+        )
+    elif "追猎" in context_text:
+        # 追猎 is normally a forced state caused by depleted action points,
+        # not the selected map node. Keep it as evidence without assigning
+        # the battle type from a general map/pre-battle frame.
+        evidence.append("forced_state:pursuit")
     for context_id, markers in rules:
         marker = next(
             (item for item in markers if item in context_text),
@@ -511,11 +530,19 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
     source_floor, location_context, combat_context, evidence = (
         _page_context(tokens, kind)
     )
+    stage_name = _stage_name(tokens) if kind == ScreenKind.SETTLEMENT else ""
+    known_stage_context = KNOWN_STAGE_CONTEXTS.get(stage_name)
+    if known_stage_context:
+        combat_context = known_stage_context
+        evidence = (
+            *evidence,
+            f"stage_context:{stage_name}",
+        )
     return FrameObservation(
         kind=kind,
         confidence=confidence,
         tokens=tokens,
-        stage_name=_stage_name(tokens) if kind == ScreenKind.SETTLEMENT else "",
+        stage_name=stage_name,
         battle_command_xp=(
             _battle_command_xp(tokens)
             if kind == ScreenKind.SETTLEMENT
