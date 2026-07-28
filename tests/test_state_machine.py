@@ -34,6 +34,16 @@ class BattleSessionTrackerTests(unittest.TestCase):
             )
         )
         self.assertIsNone(
+            tracker.offer(
+                FrameObservation(
+                    ScreenKind.SETTLEMENT,
+                    0.98,
+                    stage_name="对话误判",
+                ),
+                now=0.5,
+            )
+        )
+        self.assertIsNone(
             tracker.offer(rewards, Path("rewards.jpg"), now=1.0)
         )
         self.assertIsNone(tracker.offer(other, now=2.9))

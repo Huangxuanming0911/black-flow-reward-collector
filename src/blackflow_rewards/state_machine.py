@@ -93,7 +93,9 @@ class BattleSessionTracker:
         for item in observation.context_evidence:
             if item not in pending.context_evidence:
                 pending.context_evidence.append(item)
-        if observation.stage_name:
+        # The first settlement frame has the cleanest stage title. Later
+        # overlays add dialogue/stat text that can look like another title.
+        if observation.stage_name and not pending.stage_name:
             pending.stage_name = observation.stage_name
         if observation.battle_command_xp is not None:
             pending.battle_command_xp = observation.battle_command_xp
