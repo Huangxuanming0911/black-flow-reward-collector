@@ -29,6 +29,8 @@ def main() -> int:
                     result.unowned_wealth_ingots
                 ),
                 "reward_tickets": result.reward_tickets,
+                "reward_collectibles": result.reward_collectibles,
+                "parts_box_used": result.parts_box_used,
                 "visible_reward_names": result.visible_reward_names,
                 "source_floor": result.source_floor,
                 "location_context": result.location_context,

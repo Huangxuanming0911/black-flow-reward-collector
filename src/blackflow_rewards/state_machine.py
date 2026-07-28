@@ -124,6 +124,26 @@ class BattleSessionTracker:
                 pending.reward_tickets or 0,
                 observation.reward_tickets,
             )
+        if observation.reward_collectibles is not None:
+            pending.reward_collectibles = max(
+                pending.reward_collectibles or 0,
+                observation.reward_collectibles,
+            )
+        if observation.parts_box_used is not None:
+            if pending.parts_box_start is None:
+                pending.parts_box_start = observation.parts_box_used
+            else:
+                pending.parts_box_start = min(
+                    pending.parts_box_start,
+                    observation.parts_box_used,
+                )
+            if pending.parts_box_end is None:
+                pending.parts_box_end = observation.parts_box_used
+            else:
+                pending.parts_box_end = max(
+                    pending.parts_box_end,
+                    observation.parts_box_used,
+                )
         for name in observation.visible_reward_names:
             if name not in pending.visible_reward_names:
                 pending.visible_reward_names.append(name)

@@ -311,8 +311,12 @@ class ReviewDialog:
         self.tickets = tk.StringVar(
             value=str(self.pending.reward_tickets or 0)
         )
-        self.collectibles = tk.StringVar(value="0")
-        self.parts = tk.StringVar(value="0")
+        self.collectibles = tk.StringVar(
+            value=str(self.pending.reward_collectibles or 0)
+        )
+        self.parts = tk.StringVar(
+            value=str(self.pending.reward_parts or 0)
+        )
         self.bonus = tk.StringVar(value=BONUS_NAMES["none"])
         self.bonus_details = tk.StringVar()
         self.xp_multiplier = tk.StringVar(value="1.2")

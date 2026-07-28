@@ -207,6 +207,48 @@ def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
     return len(ticket_types)
 
 
+def _reward_collectible_count(tokens: tuple[OCRToken, ...]) -> int:
+    if any(token.text.replace(" ", "") == "或是" for token in tokens):
+        return 0
+    take_buttons = [
+        token
+        for token in tokens
+        if "收下" in token.text
+        and 0.62 <= token.center_y <= 0.80
+        and token.center_x <= 0.75
+    ]
+    count = 0
+    for button in take_buttons:
+        column_text = "".join(
+            token.text.replace(" ", "")
+            for token in tokens
+            if abs(token.center_x - button.center_x) <= 0.085
+            and 0.38 <= token.center_y <= 0.62
+        )
+        if "源石锭" in column_text:
+            continue
+        if "招募券" in column_text or "招募卷" in column_text:
+            continue
+        count += 1
+    return count
+
+
+def _parts_box_used(tokens: tuple[OCRToken, ...]) -> int | None:
+    candidates: list[tuple[float, int]] = []
+    for token in tokens:
+        if not (0.55 <= token.center_x <= 0.75):
+            continue
+        if token.center_y < 0.90:
+            continue
+        match = re.fullmatch(
+            r"(\d{1,2})\s*/\s*(\d{1,2})",
+            token.text,
+        )
+        if match:
+            candidates.append((token.confidence, int(match.group(1))))
+    return max(candidates)[1] if candidates else None
+
+
 def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
     ignored = {
         "收下",
@@ -368,6 +410,21 @@ def _page_context(
     context_text = "".join(
         token.text.replace(" ", "") for token in context_tokens
     )
+    full_text = "".join(
+        token.text.replace(" ", "") for token in tokens
+    )
+    if (
+        "流窜“居民”已经从林间消失" in full_text
+        or "流窜居民已经从林间消失" in full_text
+    ):
+        combat_context = "resident_occupied"
+        evidence.append("settlement_notice:resident_disappeared")
+        return (
+            source_floor,
+            location_context,
+            combat_context,
+            tuple(evidence),
+        )
     rules = (
         ("resident_base", ("“居民”据点", "\"居民\"据点", "居民据点")),
         (
@@ -430,6 +487,16 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
         unowned_wealth_ingots=unowned_ingots,
         reward_tickets=(
             _reward_ticket_count(tokens)
+            if kind == ScreenKind.REWARDS
+            else None
+        ),
+        reward_collectibles=(
+            _reward_collectible_count(tokens)
+            if kind == ScreenKind.REWARDS
+            else None
+        ),
+        parts_box_used=(
+            _parts_box_used(tokens)
             if kind == ScreenKind.REWARDS
             else None
         ),

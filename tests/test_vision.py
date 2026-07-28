@@ -105,6 +105,52 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_tickets, 1)
 
+    def test_direct_collectible_and_parts_box_are_read(self) -> None:
+        tokens = (
+            token("残破合影", 0.30, 0.49),
+            token("收下", 0.30, 0.73),
+            token("辅助招募券", 0.48, 0.49),
+            token("收下", 0.48, 0.73),
+            token("“抉择”", 0.67, 0.49),
+            token("选择", 0.67, 0.73),
+            token("直接离开", 0.85, 0.57),
+            token("5/14", 0.65, 0.97),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_tickets, 1)
+        self.assertEqual(result.reward_collectibles, 1)
+        self.assertEqual(result.parts_box_used, 5)
+
+    def test_part_choice_screen_is_not_counted_as_collectibles(self) -> None:
+        tokens = (
+            token("霜晶树", 0.39, 0.46),
+            token("或是", 0.50, 0.46),
+            token("报废轮子", 0.61, 0.46),
+            token("收下", 0.39, 0.69),
+            token("收下", 0.61, 0.69),
+            token("直接离开", 0.80, 0.57),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_collectibles, 0)
+
+    def test_resident_disappearance_notice_sets_node_type(self) -> None:
+        tokens = (
+            token("成功通过", 0.12, 0.79),
+            token("本次作战", 0.75, 0.36),
+            token("作战", 0.08, 0.64),
+            token("枯枝", 0.10, 0.69),
+            token(
+                "流窜“居民”已经从林间消失",
+                0.80,
+                0.18,
+            ),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
+        self.assertEqual(result.combat_context, "resident_occupied")
+
     def test_top_area_title_extracts_floor_and_location(self) -> None:
         tokens = (
             token("血色空脉", 0.50, 0.04),

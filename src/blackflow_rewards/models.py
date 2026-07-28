@@ -55,6 +55,8 @@ class FrameObservation:
     normal_reward_ingots: int | None = None
     unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
+    reward_collectibles: int | None = None
+    parts_box_used: int | None = None
     visible_reward_names: tuple[str, ...] = ()
     source_floor: str = ""
     location_context: str = ""
@@ -78,6 +80,9 @@ class PendingBattle:
     normal_reward_ingots: int | None = None
     unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
+    reward_collectibles: int | None = None
+    parts_box_start: int | None = None
+    parts_box_end: int | None = None
     visible_reward_names: list[str] = field(default_factory=list)
     ocr_text: list[str] = field(default_factory=list)
     saw_rewards: bool = False
@@ -85,6 +90,12 @@ class PendingBattle:
     location_context: str = ""
     combat_context: str = ""
     context_evidence: list[str] = field(default_factory=list)
+
+    @property
+    def reward_parts(self) -> int | None:
+        if self.parts_box_start is None or self.parts_box_end is None:
+            return None
+        return max(0, self.parts_box_end - self.parts_box_start)
 
 
 @dataclass(frozen=True, slots=True)
