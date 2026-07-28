@@ -104,6 +104,7 @@ class LiveCollector:
         self._thread: threading.Thread | None = None
         self._capture_thread: threading.Thread | None = None
         self._frames = FrameBuffer()
+        self._last_phase = ""
 
     @property
     def running(self) -> bool:
@@ -115,12 +116,19 @@ class LiveCollector:
         self._stop.clear()
         self._burst.clear()
         self._frames = FrameBuffer()
+        self._last_phase = ""
         self._thread = threading.Thread(
             target=self._run,
             name="blackflow-reward-analyze",
             daemon=True,
         )
         self._thread.start()
+
+    def _emit_phase(self, phase: str) -> None:
+        if phase == self._last_phase:
+            return
+        self._last_phase = phase
+        self.events.put(("phase", phase))
 
     def stop(self) -> None:
         self._stop.set()
@@ -132,6 +140,7 @@ class LiveCollector:
             self.events.put(
                 ("status", f"已只读连接：{capture.window_name}")
             )
+            self._emit_phase("monitoring")
             previous_signature: np.ndarray | None = None
             while not self._stop.is_set():
                 started = time.monotonic()
@@ -201,6 +210,7 @@ class LiveCollector:
                             now=time.monotonic(),
                         )
                         if completed is not None:
+                            self._emit_phase("review")
                             self.events.put(("review", completed))
                             self._burst.clear()
                             pending_dir = None
@@ -224,6 +234,27 @@ class LiveCollector:
                     ScreenKind.REWARDS,
                 ):
                     self._burst.set()
+                if (
+                    observation.kind == ScreenKind.SETTLEMENT
+                    and tracker.pending is None
+                ):
+                    self._emit_phase("settlement")
+                elif (
+                    observation.kind == ScreenKind.REWARDS
+                    and (
+                        tracker.pending is None
+                        or not tracker.pending.saw_rewards
+                    )
+                ):
+                    self._emit_phase("rewards")
+                elif (
+                    observation.kind == ScreenKind.OTHER
+                    and tracker.pending is not None
+                    and tracker.pending.saw_rewards
+                    and "main_map_hud:action_points"
+                    in observation.context_evidence
+                ):
+                    self._emit_phase("finalizing")
 
                 screenshot_path = None
                 if observation.kind in (
@@ -266,6 +297,7 @@ class LiveCollector:
                     now=captured.captured_at,
                 )
                 if completed is not None:
+                    self._emit_phase("review")
                     self.events.put(("review", completed))
                     self._burst.clear()
                     pending_dir = None
@@ -273,7 +305,9 @@ class LiveCollector:
 
             completed = tracker.force_finalize()
             if completed is not None:
+                self._emit_phase("review")
                 self.events.put(("review", completed))
+            self._emit_phase("stopped")
             self.events.put(("status", "采集已停止"))
         except Exception as exc:
             self.events.put(("error", str(exc)))

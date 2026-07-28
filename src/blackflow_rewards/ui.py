@@ -28,6 +28,32 @@ LOCATION_NAMES, LOCATION_IDS = _mapping(LOCATION_CONTEXTS)
 COMBAT_NAMES, COMBAT_IDS = _mapping(COMBAT_CONTEXTS)
 BONUS_NAMES, BONUS_IDS = _mapping(BONUS_SOURCES)
 
+PHASE_LABELS = {
+    "idle": "○ 尚未开始",
+    "connecting": "◌ 正在连接游戏窗口并加载 OCR",
+    "monitoring": "● 正在监控，等待战斗结算",
+    "settlement": "● 已捕获结算，正在等待奖励",
+    "rewards": "● 正在记录本场奖励",
+    "finalizing": "● 已返回地图，正在生成统计",
+    "review": "● 等待确认本场统计",
+    "stopping": "◌ 正在停止",
+    "stopped": "○ 采集已停止",
+    "error": "● 采集发生错误",
+}
+
+PHASE_STYLES = {
+    "idle": "Phase.Idle.TLabel",
+    "connecting": "Phase.Active.TLabel",
+    "monitoring": "Phase.Ready.TLabel",
+    "settlement": "Phase.Capture.TLabel",
+    "rewards": "Phase.Capture.TLabel",
+    "finalizing": "Phase.Active.TLabel",
+    "review": "Phase.Review.TLabel",
+    "stopping": "Phase.Active.TLabel",
+    "stopped": "Phase.Idle.TLabel",
+    "error": "Phase.Error.TLabel",
+}
+
 
 class CollectorApp:
     def __init__(self, root: tk.Tk, project_root: Path) -> None:
@@ -39,6 +65,7 @@ class CollectorApp:
             self.store.root,
             self.events,
         )
+        self._toast: tk.Toplevel | None = None
         self._build()
         self.root.after(150, self._poll_events)
 
@@ -65,7 +92,10 @@ class CollectorApp:
         )
         self.combat_var = tk.StringVar(value=COMBAT_NAMES["combat"])
         self.topmost_var = tk.BooleanVar(value=True)
-        self.status_var = tk.StringVar(value="尚未连接")
+        self.phase_var = tk.StringVar(value=PHASE_LABELS["idle"])
+        self.status_var = tk.StringVar(
+            value="点击“开始实时采集”后即可切回游戏。"
+        )
         self.count_var = tk.StringVar(
             value=f"已保存样本：{len(self.store.read_all())}"
         )
@@ -112,11 +142,13 @@ class CollectorApp:
             command=self.start,
         )
         self.start_button.pack(side="left")
-        ttk.Button(
+        self.stop_button = ttk.Button(
             buttons,
             text="停止",
             command=self.stop,
-        ).pack(side="left", padx=8)
+            state="disabled",
+        )
+        self.stop_button.pack(side="left", padx=8)
         ttk.Button(
             buttons,
             text="手动补录一场",
@@ -138,11 +170,48 @@ class CollectorApp:
             sticky="nsew",
             pady=(8, 0),
         )
+        style = ttk.Style(self.root)
+        style.configure(
+            "Phase.Idle.TLabel",
+            foreground="#666666",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        style.configure(
+            "Phase.Ready.TLabel",
+            foreground="#138a4b",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        style.configure(
+            "Phase.Capture.TLabel",
+            foreground="#b45f06",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        style.configure(
+            "Phase.Active.TLabel",
+            foreground="#1769aa",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        style.configure(
+            "Phase.Review.TLabel",
+            foreground="#6f42c1",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        style.configure(
+            "Phase.Error.TLabel",
+            foreground="#b00020",
+            font=("Microsoft YaHei UI", 11, "bold"),
+        )
+        self.phase_label = ttk.Label(
+            status,
+            textvariable=self.phase_var,
+            style=PHASE_STYLES["idle"],
+        )
+        self.phase_label.pack(anchor="w")
         ttk.Label(
             status,
             textvariable=self.status_var,
             wraplength=500,
-        ).pack(anchor="w")
+        ).pack(anchor="w", pady=(7, 0))
         ttk.Label(status, textvariable=self.count_var).pack(
             anchor="w",
             pady=(6, 0),
@@ -150,8 +219,8 @@ class CollectorApp:
         ttk.Label(
             status,
             text=(
-                "提示：出现奖励页时正常领取；识别到离开奖励页后约 1 秒"
-                "自动弹出确认窗口。"
+                "提示：奖励出现后正常领取；明确返回地图约 1 秒后弹窗，"
+                "无法确认回图时使用 5 秒兜底。"
             ),
             foreground="#555555",
             wraplength=500,
@@ -186,9 +255,13 @@ class CollectorApp:
         if self.live.running:
             return
         self.status_var.set("正在连接明日方舟窗口并加载 OCR……")
+        self._set_phase("connecting")
         self.live.start()
 
     def stop(self) -> None:
+        if not self.live.running:
+            return
+        self._set_phase("stopping")
         self.live.stop()
 
     def _poll_events(self) -> None:
@@ -197,8 +270,11 @@ class CollectorApp:
                 event, payload = self.events.get_nowait()
                 if event == "status":
                     self.status_var.set(str(payload))
+                elif event == "phase":
+                    self._set_phase(str(payload))
                 elif event == "error":
                     self.status_var.set(f"错误：{payload}")
+                    self._set_phase("error")
                     messagebox.showerror("采集错误", str(payload))
                 elif event == "review":
                     self._review(payload)  # type: ignore[arg-type]
@@ -206,7 +282,91 @@ class CollectorApp:
             pass
         self.root.after(150, self._poll_events)
 
+    def _set_phase(self, phase: str) -> None:
+        self.phase_var.set(PHASE_LABELS.get(phase, phase))
+        self.phase_label.configure(
+            style=PHASE_STYLES.get(phase, "Phase.Idle.TLabel")
+        )
+        running = phase not in ("idle", "stopped", "error")
+        self.start_button.configure(
+            state="disabled" if running else "normal"
+        )
+        self.stop_button.configure(
+            state="normal" if running else "disabled"
+        )
+        messages = {
+            "monitoring": "采集已启动：正在后台等待结算",
+            "settlement": "已捕获结算：正在等待经验与奖励页面",
+            "rewards": "正在记录：请正常领取全部奖励",
+            "finalizing": "已确认返回地图：即将打开统计",
+        }
+        if phase in messages:
+            self._show_toast(messages[phase])
+
+    def _show_toast(self, message: str) -> None:
+        if self._toast is not None:
+            try:
+                self._toast.destroy()
+            except tk.TclError:
+                pass
+        toast = tk.Toplevel(self.root)
+        self._toast = toast
+        toast.overrideredirect(True)
+        toast.attributes("-topmost", True)
+        frame = tk.Frame(
+            toast,
+            background="#17212b",
+            padx=18,
+            pady=13,
+            highlightthickness=1,
+            highlightbackground="#3d5266",
+        )
+        frame.pack(fill="both", expand=True)
+        tk.Label(
+            frame,
+            text="黑流树海奖励采集器",
+            background="#17212b",
+            foreground="#7bdcb5",
+            font=("Microsoft YaHei UI", 10, "bold"),
+        ).pack(anchor="w")
+        tk.Label(
+            frame,
+            text=message,
+            background="#17212b",
+            foreground="white",
+            font=("Microsoft YaHei UI", 10),
+        ).pack(anchor="w", pady=(4, 0))
+        toast.update_idletasks()
+        width = max(330, toast.winfo_reqwidth())
+        height = toast.winfo_reqheight()
+        x = toast.winfo_screenwidth() - width - 24
+        y = toast.winfo_screenheight() - height - 54
+        toast.geometry(f"{width}x{height}+{x}+{y}")
+        toast.lift()
+        toast.after(2400, self._close_toast)
+
+    def _close_toast(self) -> None:
+        if self._toast is None:
+            return
+        try:
+            self._toast.destroy()
+        except tk.TclError:
+            pass
+        self._toast = None
+
+    def _present_root(self) -> None:
+        self.root.deiconify()
+        self.root.state("normal")
+        self.root.lift()
+        self.root.attributes("-topmost", True)
+        self.root.after(
+            900,
+            lambda: self.root.attributes("-topmost", False),
+        )
+
     def _review(self, pending: PendingBattle) -> None:
+        self._set_phase("review")
+        self._present_root()
         default_location = (
             LOCATION_NAMES.get(pending.location_context)
             or self.location_var.get()
@@ -229,6 +389,8 @@ class CollectorApp:
         )
         self.root.wait_window(dialog.window)
         if dialog.record is None:
+            if self.live.running:
+                self._set_phase("monitoring")
             return
         self.store.append(dialog.record)
         self.floor_var.set(dialog.record.source_floor)
@@ -244,6 +406,8 @@ class CollectorApp:
         self.status_var.set(
             f"已保存：{dialog.record.stage_name or dialog.record.sample_id}"
         )
+        if self.live.running:
+            self._set_phase("monitoring")
 
     def _close(self) -> None:
         self.live.stop()
@@ -261,6 +425,8 @@ class ReviewDialog:
         self.pending = pending
         self.record: RewardRecord | None = None
         self.window = tk.Toplevel(parent)
+        self._topmost = topmost
+        self._presented = False
         self.window.title("确认本场战斗奖励")
         self.window.geometry("720x760")
         self.window.minsize(680, 680)
@@ -269,7 +435,21 @@ class ReviewDialog:
         self.window.transient(parent)
         self._build(defaults)
         self.window.grab_set()
+        self.window.after(20, self._present)
+        self.window.after(350, self._present)
+
+    def _present(self) -> None:
+        if not self.window.winfo_exists():
+            return
+        self.window.deiconify()
+        self.window.state("normal")
+        self.window.lift()
+        if self._topmost:
+            self.window.attributes("-topmost", True)
         self.window.focus_force()
+        if not self._presented:
+            self.window.bell()
+            self._presented = True
 
     def _build(self, defaults: dict[str, str]) -> None:
         outer = ttk.Frame(self.window, padding=16)
