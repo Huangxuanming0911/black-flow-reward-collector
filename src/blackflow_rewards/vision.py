@@ -95,6 +95,29 @@ def classify_tokens(tokens: Iterable[OCRToken]) -> ScreenKind:
 
 
 def _stage_name(tokens: tuple[OCRToken, ...]) -> str:
+    labels = [
+        token
+        for token in tokens
+        if token.text.replace(" ", "") == "作战"
+        and token.center_x <= 0.20
+        and 0.50 <= token.center_y <= 0.75
+    ]
+    if labels:
+        anchor = max(labels, key=lambda token: token.center_y)
+        anchored = [
+            token
+            for token in tokens
+            if abs(token.center_x - anchor.center_x) <= 0.16
+            and 0.015 <= token.center_y - anchor.center_y <= 0.10
+            and 2 <= len(token.text.replace(" ", "")) <= 12
+            and "成功通过" not in token.text
+        ]
+        if anchored:
+            return min(
+                anchored,
+                key=lambda token: token.center_y - anchor.center_y,
+            ).text.strip()
+
     candidates: list[OCRToken] = []
     for token in tokens:
         text = token.text.strip()
@@ -128,10 +151,19 @@ def _stage_name(tokens: tuple[OCRToken, ...]) -> str:
 def _battle_command_xp(
     tokens: tuple[OCRToken, ...],
 ) -> int | None:
+    level_labels = [
+        token for token in tokens if "指挥等级" in token.text
+    ]
     anchors = [
         token
         for token in tokens
         if "本次作战" in token.text
+        and 0.33 <= token.center_y <= 0.50
+        and any(
+            label.center_x < token.center_x
+            and abs(label.center_y - token.center_y) <= 0.04
+            for label in level_labels
+        )
     ]
     if anchors:
         # The lower "本次作战" label belongs to command XP; the upper one
@@ -153,19 +185,26 @@ def _battle_command_xp(
             )
         if anchored_values:
             return min(anchored_values)[1]
+    return None
 
-    values: list[tuple[float, int]] = []
+
+def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
+    ticket_types: set[str] = set()
     for token in tokens:
-        compact = token.text.replace(" ", "")
-        match = re.fullmatch(r"\D*(\d{1,3})\D*", compact)
-        if not match:
+        if not (0.03 <= token.center_x <= 0.75):
             continue
-        if 0.58 <= token.center_x <= 0.80 and 0.30 <= token.center_y <= 0.48:
-            values.append((token.confidence, int(match.group(1))))
-    if not values:
-        return None
-    values.sort(reverse=True)
-    return values[0][1]
+        if not (0.30 <= token.center_y <= 0.70):
+            continue
+        compact = token.text.replace(" ", "").replace("卷", "券")
+        if "招募券" not in compact:
+            continue
+        match = re.search(
+            r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)?"
+            r"招募券",
+            compact,
+        )
+        ticket_types.add(match.group(0) if match else compact)
+    return len(ticket_types)
 
 
 def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
@@ -390,7 +429,7 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
         normal_reward_ingots=normal_ingots,
         unowned_wealth_ingots=unowned_ingots,
         reward_tickets=(
-            sum(name.endswith("招募券") for name in reward_names)
+            _reward_ticket_count(tokens)
             if kind == ScreenKind.REWARDS
             else None
         ),

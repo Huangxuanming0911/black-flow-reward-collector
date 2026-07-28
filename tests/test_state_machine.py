@@ -98,6 +98,7 @@ class BattleSessionTrackerTests(unittest.TestCase):
                 0.96,
                 reward_ingots=2,
                 normal_reward_ingots=2,
+                reward_tickets=1,
             ),
             now=0.0,
         )
@@ -107,6 +108,7 @@ class BattleSessionTrackerTests(unittest.TestCase):
                 0.96,
                 reward_ingots=2,
                 unowned_wealth_ingots=2,
+                reward_tickets=0,
             ),
             now=1.0,
         )
@@ -119,6 +121,7 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertEqual(completed.normal_reward_ingots, 2)
         self.assertEqual(completed.unowned_wealth_ingots, 2)
         self.assertEqual(completed.reward_ingots, 4)
+        self.assertEqual(completed.reward_tickets, 1)
 
 
 if __name__ == "__main__":

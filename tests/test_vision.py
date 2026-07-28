@@ -20,11 +20,11 @@ class VisionRuleTests(unittest.TestCase):
     def test_settlement_text_and_fields(self) -> None:
         tokens = (
             token("成功通过", 0.16, 0.70),
-            token("本次作战", 0.66, 0.32),
+            token("本次作战", 0.66, 0.35),
             token("指挥等级", 0.56, 0.35),
             token("作战", 0.10, 0.52),
             token("趁火打劫", 0.16, 0.58),
-            token("30", 0.65, 0.39),
+            token("30", 0.65, 0.42),
         )
         result = analyze_tokens(tokens)
         self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
@@ -45,6 +45,17 @@ class VisionRuleTests(unittest.TestCase):
         result = analyze_tokens(tokens)
         self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
         self.assertEqual(result.battle_command_xp, 14)
+
+    def test_animating_settlement_does_not_use_shield_as_xp(self) -> None:
+        tokens = (
+            token("成功通过", 0.12, 0.79),
+            token("本次作战", 0.75, 0.24),
+            token("护盾值", 0.65, 0.24),
+            token("2", 0.65, 0.30),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
+        self.assertIsNone(result.battle_command_xp)
 
     def test_reward_text_and_ingot_quantity(self) -> None:
         tokens = (
@@ -83,6 +94,16 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.normal_reward_ingots, 2)
         self.assertEqual(result.unowned_wealth_ingots, 2)
         self.assertEqual(result.reward_ingots, 4)
+
+    def test_recruit_ticket_ocr_variant_is_counted(self) -> None:
+        tokens = (
+            token("重装招募卷INFO/", 0.24, 0.53),
+            token("直接离开", 0.55, 0.57),
+            token("收下", 0.20, 0.72),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_tickets, 1)
 
     def test_top_area_title_extracts_floor_and_location(self) -> None:
         tokens = (

@@ -130,7 +130,19 @@ class LiveCollector:
                     self.events.put(("review", completed))
                     pending_dir = None
                     last_saved_signature = None
-                time.sleep(max(0.25, self.interval_seconds))
+                if (
+                    previous_observation.kind == ScreenKind.SETTLEMENT
+                    and previous_observation.battle_command_xp is None
+                ):
+                    # Settlement UI is still animating. Re-capture as soon as
+                    # OCR returns so the completed XP panel is not skipped.
+                    sleep_seconds = 0.08
+                elif previous_observation.kind == ScreenKind.REWARDS:
+                    # Reward cards can disappear after one click.
+                    sleep_seconds = 0.12
+                else:
+                    sleep_seconds = max(0.25, self.interval_seconds)
+                time.sleep(sleep_seconds)
             completed = tracker.force_finalize()
             if completed is not None:
                 self.events.put(("review", completed))

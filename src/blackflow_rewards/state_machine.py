@@ -120,7 +120,10 @@ class BattleSessionTracker:
                 + (pending.unowned_wealth_ingots or 0)
             )
         if observation.reward_tickets is not None:
-            pending.reward_tickets = observation.reward_tickets
+            pending.reward_tickets = max(
+                pending.reward_tickets or 0,
+                observation.reward_tickets,
+            )
         for name in observation.visible_reward_names:
             if name not in pending.visible_reward_names:
                 pending.visible_reward_names.append(name)
