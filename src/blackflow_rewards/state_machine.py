@@ -8,6 +8,14 @@ import uuid
 from .models import FrameObservation, PendingBattle, ScreenKind
 
 
+def _prefer_combat_context(existing: str, incoming: str) -> str:
+    if not incoming:
+        return existing
+    if existing and existing != "combat" and incoming == "combat":
+        return existing
+    return incoming
+
+
 def new_sample_id() -> str:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     return f"{timestamp}-{uuid.uuid4().hex[:8]}"
@@ -89,6 +97,8 @@ class BattleSessionTracker:
         self.pending = None
         self._last_target_at = None
         self._map_returned_at = None
+        self._combat_context = ""
+        self._context_evidence = []
         return completed
 
     def _remember_context(
@@ -100,7 +110,10 @@ class BattleSessionTracker:
         if observation.location_context:
             self._location_context = observation.location_context
         if observation.combat_context:
-            self._combat_context = observation.combat_context
+            self._combat_context = _prefer_combat_context(
+                self._combat_context,
+                observation.combat_context,
+            )
         for item in observation.context_evidence:
             if item not in self._context_evidence:
                 self._context_evidence.append(item)
@@ -110,6 +123,8 @@ class BattleSessionTracker:
         self.pending = None
         self._last_target_at = None
         self._map_returned_at = None
+        self._combat_context = ""
+        self._context_evidence = []
         return completed
 
     def _merge(
@@ -124,7 +139,10 @@ class BattleSessionTracker:
         if observation.location_context:
             pending.location_context = observation.location_context
         if observation.combat_context:
-            pending.combat_context = observation.combat_context
+            pending.combat_context = _prefer_combat_context(
+                pending.combat_context,
+                observation.combat_context,
+            )
         for item in observation.context_evidence:
             if item not in pending.context_evidence:
                 pending.context_evidence.append(item)

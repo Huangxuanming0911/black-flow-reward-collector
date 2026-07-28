@@ -3,11 +3,13 @@ from __future__ import annotations
 import csv
 import json
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
+import shutil
 from statistics import fmean
 from typing import Any
 
-from .models import RewardRecord
+from .models import COMBAT_CONTEXTS, RewardRecord
 
 
 CSV_COLUMNS = (
@@ -56,6 +58,49 @@ class RewardStore:
         records = self.read_all()
         self._write_csv(records)
         self._write_summary(records)
+
+    def correct_combat_context(
+        self,
+        sample_id: str,
+        combat_context: str,
+        note: str = "",
+    ) -> Path:
+        valid_contexts = {item_id for item_id, _ in COMBAT_CONTEXTS}
+        if combat_context not in valid_contexts:
+            raise ValueError(f"未知战斗类型：{combat_context}")
+        records = self.read_all()
+        matches = [
+            payload
+            for payload in records
+            if payload.get("sample_id") == sample_id
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"样本必须唯一存在，实际找到 {len(matches)} 条：{sample_id}"
+            )
+        payload = matches[0]
+        payload["combat_context"] = combat_context
+        if note:
+            old_notes = str(payload.get("reviewer_notes", "")).strip()
+            payload["reviewer_notes"] = (
+                f"{old_notes}；{note}" if old_notes else note
+            )
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        backup_path = self.jsonl_path.with_name(
+            f"{self.jsonl_path.name}.{timestamp}.bak"
+        )
+        shutil.copy2(self.jsonl_path, backup_path)
+        replacement_path = self.jsonl_path.with_suffix(".jsonl.tmp")
+        replacement_path.write_text(
+            "".join(
+                json.dumps(item, ensure_ascii=False) + "\n"
+                for item in records
+            ),
+            encoding="utf-8",
+        )
+        replacement_path.replace(self.jsonl_path)
+        self.rebuild_outputs()
+        return backup_path
 
     def read_all(self) -> list[dict[str, Any]]:
         if not self.jsonl_path.exists():

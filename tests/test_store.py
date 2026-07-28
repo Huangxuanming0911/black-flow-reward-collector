@@ -64,6 +64,31 @@ class RewardStoreTests(unittest.TestCase):
                 2.0,
             )
 
+    def test_correct_combat_context_rebuilds_outputs(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = RewardStore(Path(directory))
+            original = record("base", "none")
+            store.append(original)
+            backup = store.correct_combat_context(
+                original.sample_id,
+                "combat",
+                "人工确认普通作战",
+            )
+            self.assertTrue(backup.exists())
+            payload = store.read_all()[0]
+            self.assertEqual(payload["combat_context"], "combat")
+            self.assertIn(
+                "人工确认普通作战",
+                payload["reviewer_notes"],
+            )
+            summary = json.loads(
+                store.summary_path.read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                summary["groups"][0]["combat_context"],
+                "combat",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

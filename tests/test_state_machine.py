@@ -231,6 +231,91 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertIsNone(tracker.offer(returned_map, now=2.0))
         self.assertIsNone(tracker.offer(returned_map, now=3.1))
 
+    def test_specific_type_survives_generic_settlement_label(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.OTHER,
+                0.9,
+                combat_context="emergency_combat",
+                context_evidence=("combat_text:紧急作战",),
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.SETTLEMENT,
+                0.98,
+                combat_context="combat",
+                context_evidence=("combat_text:作战",),
+            ),
+            now=1.0,
+        )
+        tracker.offer(
+            FrameObservation(ScreenKind.REWARDS, 0.96),
+            now=2.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.3),
+            now=3.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(
+            completed.combat_context,
+            "emergency_combat",
+        )
+
+    def test_specific_type_does_not_leak_into_next_battle(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.OTHER,
+                0.9,
+                combat_context="emergency_combat",
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.SETTLEMENT,
+                0.98,
+                combat_context="combat",
+            ),
+            now=1.0,
+        )
+        tracker.offer(
+            FrameObservation(ScreenKind.REWARDS, 0.96),
+            now=2.0,
+        )
+        first = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.3),
+            now=3.0,
+        )
+        self.assertIsNotNone(first)
+        assert first is not None
+        self.assertEqual(first.combat_context, "emergency_combat")
+
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.SETTLEMENT,
+                0.98,
+                combat_context="combat",
+            ),
+            now=4.0,
+        )
+        tracker.offer(
+            FrameObservation(ScreenKind.REWARDS, 0.96),
+            now=5.0,
+        )
+        second = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.3),
+            now=6.0,
+        )
+        self.assertIsNotNone(second)
+        assert second is not None
+        self.assertEqual(second.combat_context, "combat")
+
 
 if __name__ == "__main__":
     unittest.main()
