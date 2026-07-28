@@ -137,6 +137,21 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.reward_collectibles, 1)
         self.assertEqual(result.parts_box_used, 5)
 
+    def test_immediate_part_grant_is_read_from_card_text(self) -> None:
+        tokens = (
+            token("囊中骨", 0.48, 0.494),
+            token("立刻获得3个随机的普通加工", 0.48, 0.552),
+            token("品", 0.48, 0.579),
+            token("收下", 0.48, 0.728),
+            token("7/14", 0.65, 0.967),
+            token("直接离开", 0.85, 0.57),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(
+            result.part_grant_effects,
+            (("囊中骨", 3),),
+        )
+
     def test_part_choice_screen_is_not_counted_as_collectibles(self) -> None:
         tokens = (
             token("霜晶树", 0.39, 0.46),

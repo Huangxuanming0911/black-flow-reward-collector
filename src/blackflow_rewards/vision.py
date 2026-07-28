@@ -249,6 +249,33 @@ def _parts_box_used(tokens: tuple[OCRToken, ...]) -> int | None:
     return max(candidates)[1] if candidates else None
 
 
+def _part_grant_effects(
+    tokens: tuple[OCRToken, ...],
+) -> tuple[tuple[str, int], ...]:
+    effects: list[tuple[str, int]] = []
+    title_tokens = [
+        token
+        for token in tokens
+        if 0.44 <= token.center_y <= 0.53
+        and 0.04 <= token.center_x <= 0.75
+        and 2 <= len(token.text.replace(" ", "")) <= 12
+    ]
+    for title in title_tokens:
+        description = "".join(
+            token.text.replace(" ", "")
+            for token in sorted(tokens, key=lambda item: item.center_y)
+            if abs(token.center_x - title.center_x) <= 0.09
+            and 0.52 <= token.center_y <= 0.62
+        )
+        match = re.search(
+            r"立刻获得(\d{1,2})个.*(?:加工品|零件)",
+            description,
+        )
+        if match:
+            effects.append((title.text.strip(), int(match.group(1))))
+    return tuple(dict.fromkeys(effects))
+
+
 def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
     ignored = {
         "收下",
@@ -511,6 +538,11 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
             _parts_box_used(tokens)
             if kind == ScreenKind.REWARDS
             else None
+        ),
+        part_grant_effects=(
+            _part_grant_effects(tokens)
+            if kind == ScreenKind.REWARDS
+            else ()
         ),
         visible_reward_names=reward_names,
         source_floor=source_floor,

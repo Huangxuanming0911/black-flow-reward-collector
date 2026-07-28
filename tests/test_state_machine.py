@@ -132,6 +132,59 @@ class BattleSessionTrackerTests(unittest.TestCase):
         self.assertEqual(completed.reward_collectibles, 1)
         self.assertEqual(completed.reward_parts, 2)
 
+    def test_collectible_part_grant_is_separate_from_node_parts(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_collectibles=1,
+                parts_box_used=7,
+                visible_reward_names=("囊中骨", "“抉择”"),
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_collectibles=1,
+                parts_box_used=10,
+                visible_reward_names=("囊中骨", "“抉择”"),
+            ),
+            now=1.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_collectibles=0,
+                parts_box_used=10,
+                visible_reward_names=("“抉择”",),
+            ),
+            now=2.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_collectibles=0,
+                parts_box_used=11,
+                visible_reward_names=("“抉择”",),
+            ),
+            now=3.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.2),
+            now=4.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.parts_total, 4)
+        self.assertEqual(completed.bonus_parts, 3)
+        self.assertEqual(completed.reward_parts, 1)
+        self.assertEqual(completed.parts_bonus_details, "囊中骨 +3")
+
     def test_settlement_waits_through_upgrade_pages_for_rewards(self) -> None:
         tracker = BattleSessionTracker(
             finalize_delay_seconds=1.0,

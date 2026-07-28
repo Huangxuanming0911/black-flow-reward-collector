@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 import uuid
 
+from .knowledge import KNOWN_COLLECTIBLE_PART_GRANTS
 from .models import FrameObservation, PendingBattle, ScreenKind
 
 
@@ -182,24 +183,50 @@ class BattleSessionTracker:
                 pending.reward_collectibles or 0,
                 observation.reward_collectibles,
             )
-        if observation.parts_box_used is not None:
-            if pending.parts_box_start is None:
-                pending.parts_box_start = observation.parts_box_used
-            else:
-                pending.parts_box_start = min(
-                    pending.parts_box_start,
-                    observation.parts_box_used,
-                )
-            if pending.parts_box_end is None:
-                pending.parts_box_end = observation.parts_box_used
-            else:
-                pending.parts_box_end = max(
-                    pending.parts_box_end,
-                    observation.parts_box_used,
-                )
         for name in observation.visible_reward_names:
             if name not in pending.visible_reward_names:
                 pending.visible_reward_names.append(name)
+            if name in KNOWN_COLLECTIBLE_PART_GRANTS:
+                pending.part_grant_candidates.setdefault(
+                    name,
+                    KNOWN_COLLECTIBLE_PART_GRANTS[name],
+                )
+        for name, amount in observation.part_grant_effects:
+            pending.part_grant_candidates[name] = amount
+        if observation.parts_box_used is not None:
+            current_used = observation.parts_box_used
+            previous_used = pending.parts_box_last
+            if previous_used is not None and current_used > previous_used:
+                delta = current_used - previous_used
+                for name, amount in pending.part_grant_candidates.items():
+                    if (
+                        name in pending.visible_reward_names
+                        and not any(
+                            item.startswith(f"{name} +")
+                            for item in pending.applied_part_effects
+                        )
+                        and delta == amount
+                    ):
+                        pending.bonus_parts += amount
+                        pending.applied_part_effects.append(
+                            f"{name} +{amount}"
+                        )
+                        break
+            pending.parts_box_last = current_used
+            if pending.parts_box_start is None:
+                pending.parts_box_start = current_used
+            else:
+                pending.parts_box_start = min(
+                    pending.parts_box_start,
+                    current_used,
+                )
+            if pending.parts_box_end is None:
+                pending.parts_box_end = current_used
+            else:
+                pending.parts_box_end = max(
+                    pending.parts_box_end,
+                    current_used,
+                )
         if observation.raw_text and observation.raw_text not in pending.ocr_text:
             pending.ocr_text.append(observation.raw_text)
         if observation.kind == ScreenKind.REWARDS:

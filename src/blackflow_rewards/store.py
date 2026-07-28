@@ -27,6 +27,9 @@ CSV_COLUMNS = (
     "recruitment_tickets",
     "collectibles",
     "parts",
+    "bonus_parts",
+    "parts_total",
+    "parts_bonus_details",
     "bonus_source",
     "bonus_details",
     "command_xp_multiplier",
@@ -85,6 +88,45 @@ class RewardStore:
             payload["reviewer_notes"] = (
                 f"{old_notes}；{note}" if old_notes else note
             )
+        return self._replace_records(records)
+
+    def correct_parts_breakdown(
+        self,
+        sample_id: str,
+        parts: int,
+        bonus_parts: int,
+        details: str = "",
+        note: str = "",
+    ) -> Path:
+        if parts < 0 or bonus_parts < 0:
+            raise ValueError("零件数量不能为负数")
+        records = self.read_all()
+        matches = [
+            payload
+            for payload in records
+            if payload.get("sample_id") == sample_id
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"样本必须唯一存在，实际找到 {len(matches)} 条：{sample_id}"
+            )
+        payload = matches[0]
+        payload["parts"] = parts
+        payload["bonus_parts"] = bonus_parts
+        payload["parts_total"] = parts + bonus_parts
+        payload["parts_bonus_details"] = details
+        payload["schema_version"] = "0.3.0"
+        if note:
+            old_notes = str(payload.get("reviewer_notes", "")).strip()
+            payload["reviewer_notes"] = (
+                f"{old_notes}；{note}" if old_notes else note
+            )
+        return self._replace_records(records)
+
+    def _replace_records(
+        self,
+        records: list[dict[str, Any]],
+    ) -> Path:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
         backup_path = self.jsonl_path.with_name(
             f"{self.jsonl_path.name}.{timestamp}.bak"
@@ -121,6 +163,10 @@ class RewardStore:
             writer.writeheader()
             for payload in records:
                 row = {key: payload.get(key, "") for key in CSV_COLUMNS}
+                if row["bonus_parts"] == "":
+                    row["bonus_parts"] = 0
+                if row["parts_total"] == "":
+                    row["parts_total"] = payload.get("parts", 0)
                 for key in (
                     "displayed_reward_names",
                     "settlement_screenshots",
@@ -147,11 +193,15 @@ class RewardStore:
         summary: list[dict[str, Any]] = []
         for key, samples in sorted(groups.items()):
             def mean(field: str) -> float | None:
-                values = [
-                    float(sample[field])
-                    for sample in samples
-                    if sample.get(field) is not None
-                ]
+                values: list[float] = []
+                for sample in samples:
+                    value = sample.get(field)
+                    if field == "bonus_parts" and value is None:
+                        value = 0
+                    if field == "parts_total" and value is None:
+                        value = sample.get("parts")
+                    if value is not None:
+                        values.append(float(value))
                 return round(fmean(values), 4) if values else None
 
             summary.append(
@@ -174,12 +224,14 @@ class RewardStore:
                     ),
                     "mean_collectibles": mean("collectibles"),
                     "mean_parts": mean("parts"),
+                    "mean_bonus_parts": mean("bonus_parts"),
+                    "mean_total_parts": mean("parts_total"),
                 }
             )
         self.summary_path.write_text(
             json.dumps(
                 {
-                    "schema_version": "0.2.0",
+                    "schema_version": "0.3.0",
                     "eligible_sample_count": sum(
                         len(samples) for samples in groups.values()
                     ),

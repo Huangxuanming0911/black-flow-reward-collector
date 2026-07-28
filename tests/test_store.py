@@ -89,6 +89,35 @@ class RewardStoreTests(unittest.TestCase):
                 "combat",
             )
 
+    def test_correct_parts_breakdown_keeps_base_summary_clean(self) -> None:
+        with TemporaryDirectory() as directory:
+            store = RewardStore(Path(directory))
+            original = record("base", "none")
+            store.append(original)
+            backup = store.correct_parts_breakdown(
+                original.sample_id,
+                parts=1,
+                bonus_parts=3,
+                details="囊中骨 +3",
+                note="人工拆分零件来源",
+            )
+            self.assertTrue(backup.exists())
+            payload = store.read_all()[0]
+            self.assertEqual(payload["parts"], 1)
+            self.assertEqual(payload["bonus_parts"], 3)
+            self.assertEqual(payload["parts_total"], 4)
+            self.assertEqual(
+                payload["parts_bonus_details"],
+                "囊中骨 +3",
+            )
+            summary = json.loads(
+                store.summary_path.read_text(encoding="utf-8")
+            )
+            group = summary["groups"][0]
+            self.assertEqual(group["mean_parts"], 1.0)
+            self.assertEqual(group["mean_bonus_parts"], 3.0)
+            self.assertEqual(group["mean_total_parts"], 4.0)
+
 
 if __name__ == "__main__":
     unittest.main()

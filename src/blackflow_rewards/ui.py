@@ -497,6 +497,9 @@ class ReviewDialog:
         self.parts = tk.StringVar(
             value=str(self.pending.reward_parts or 0)
         )
+        self.bonus_parts = tk.StringVar(
+            value=str(self.pending.bonus_parts)
+        )
         self.bonus = tk.StringVar(value=BONUS_NAMES["none"])
         self.bonus_details = tk.StringVar()
         self.xp_multiplier = tk.StringVar(value="1.2")
@@ -560,12 +563,40 @@ class ReviewDialog:
             11,
             "收藏品",
             self.collectibles,
-            "零件",
+            "节点奖励零件",
             self.parts,
+        )
+        ttk.Label(
+            outer,
+            text="额外效果零件",
+        ).grid(row=12, column=0, sticky="w", pady=4)
+        ttk.Entry(
+            outer,
+            textvariable=self.bonus_parts,
+            width=12,
+        ).grid(row=12, column=1, sticky="ew", padx=(10, 18), pady=4)
+        parts_total = self.pending.parts_total or 0
+        parts_details = (
+            self.pending.parts_bonus_details or "未识别具体来源"
+        )
+        ttk.Label(
+            outer,
+            text=(
+                f"零件箱总变化：{parts_total}；"
+                f"额外来源：{parts_details}"
+            ),
+            foreground="#555555",
+            wraplength=300,
+        ).grid(
+            row=12,
+            column=2,
+            columnspan=2,
+            sticky="w",
+            pady=4,
         )
 
         ttk.Separator(outer).grid(
-            row=12,
+            row=13,
             column=0,
             columnspan=4,
             sticky="ew",
@@ -573,21 +604,21 @@ class ReviewDialog:
         )
         self._combo(
             outer,
-            13,
+            14,
             "额外来源",
             self.bonus,
             tuple(BONUS_NAMES.values()),
         )
-        self._entry(outer, 14, "额外来源详情", self.bonus_details)
+        self._entry(outer, 15, "额外来源详情", self.bonus_details)
         self._number_pair(
             outer,
-            15,
+            16,
             "经验倍率",
             self.xp_multiplier,
             "源石锭倍率",
             self.ingot_multiplier,
         )
-        self._entry(outer, 16, "人工备注", self.notes)
+        self._entry(outer, 17, "人工备注", self.notes)
 
         visible = "、".join(self.pending.visible_reward_names) or "未识别"
         ttk.Label(
@@ -595,7 +626,7 @@ class ReviewDialog:
             text=f"界面展示：{visible}",
             wraplength=640,
             foreground="#444444",
-        ).grid(row=17, column=0, columnspan=4, sticky="w", pady=(12, 4))
+        ).grid(row=18, column=0, columnspan=4, sticky="w", pady=(12, 4))
         evidence = "；".join(self.pending.context_evidence) or "使用手动预设"
         automatic_type = COMBAT_NAMES.get(
             self.pending.combat_context,
@@ -609,11 +640,11 @@ class ReviewDialog:
             ),
             wraplength=640,
             foreground="#555555",
-        ).grid(row=18, column=0, columnspan=4, sticky="w", pady=(0, 4))
+        ).grid(row=19, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
         screenshot_frame = ttk.Frame(outer)
         screenshot_frame.grid(
-            row=19,
+            row=20,
             column=0,
             columnspan=4,
             sticky="w",
@@ -631,7 +662,7 @@ class ReviewDialog:
 
         buttons = ttk.Frame(outer)
         buttons.grid(
-            row=20,
+            row=21,
             column=0,
             columnspan=4,
             sticky="e",
@@ -789,6 +820,18 @@ class ReviewDialog:
                     "收藏品",
                 ),
                 parts=self._int(self.parts.get(), "零件"),
+                bonus_parts=self._int(
+                    self.bonus_parts.get(),
+                    "额外效果零件",
+                ),
+                parts_total=(
+                    self._int(self.parts.get(), "零件")
+                    + self._int(
+                        self.bonus_parts.get(),
+                        "额外效果零件",
+                    )
+                ),
+                parts_bonus_details=self.pending.parts_bonus_details,
                 bonus_source=BONUS_IDS[self.bonus.get()],
                 bonus_details=self.bonus_details.get().strip(),
                 command_xp_multiplier=self._float(
