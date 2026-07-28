@@ -310,7 +310,7 @@ class ReviewDialog:
         self.parts = tk.StringVar(value="0")
         self.bonus = tk.StringVar(value=BONUS_NAMES["none"])
         self.bonus_details = tk.StringVar()
-        self.xp_multiplier = tk.StringVar(value="1.0")
+        self.xp_multiplier = tk.StringVar(value="1.2")
         self.ingot_multiplier = tk.StringVar(value="1.0")
         self.notes = tk.StringVar()
 
