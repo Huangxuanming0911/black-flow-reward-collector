@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from collections import deque
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 import queue
 import threading
 import time
 
+import cv2
+import numpy as np
+
 from .capture import MaaWindowCapture
 from .images import write_jpeg
-from .models import FrameObservation, PendingBattle, ScreenKind
+from .models import FrameObservation, ScreenKind
 from .state_machine import BattleSessionTracker
 from .vision import (
     FrameAnalyzer,
@@ -17,20 +22,88 @@ from .vision import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class CapturedFrame:
+    jpeg: bytes
+    signature: np.ndarray
+    captured_at: float
+    epoch_ms: int
+
+    def decode(self) -> np.ndarray:
+        encoded = np.frombuffer(self.jpeg, dtype=np.uint8)
+        frame = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+        if frame is None:
+            raise RuntimeError("无法解码采集帧")
+        return frame
+
+
+class FrameBuffer:
+    """A bounded, thread-safe buffer that keeps recent pre-roll frames."""
+
+    def __init__(
+        self,
+        normal_limit: int = 8,
+        burst_limit: int = 32,
+    ) -> None:
+        self.normal_limit = normal_limit
+        self.burst_limit = burst_limit
+        self._items: deque[CapturedFrame] = deque()
+        self._condition = threading.Condition()
+        self._error: Exception | None = None
+
+    def put(self, item: CapturedFrame, burst: bool) -> None:
+        limit = self.burst_limit if burst else self.normal_limit
+        with self._condition:
+            while len(self._items) >= limit:
+                self._items.popleft()
+            self._items.append(item)
+            self._condition.notify()
+
+    def get(self, timeout: float) -> CapturedFrame | None:
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            while not self._items and self._error is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self._condition.wait(remaining)
+            if self._error is not None:
+                raise self._error
+            return self._items.popleft() if self._items else None
+
+    def set_error(self, error: Exception) -> None:
+        with self._condition:
+            self._error = error
+            self._condition.notify_all()
+
+    def wake(self) -> None:
+        with self._condition:
+            self._condition.notify_all()
+
+    def __len__(self) -> int:
+        with self._condition:
+            return len(self._items)
+
+
 class LiveCollector:
     def __init__(
         self,
         output_root: Path,
         events: queue.Queue[tuple[str, object]],
         window_title: str = "明日方舟",
-        interval_seconds: float = 0.75,
+        interval_seconds: float = 0.55,
+        burst_interval_seconds: float = 0.18,
     ) -> None:
         self.output_root = output_root
         self.events = events
         self.window_title = window_title
         self.interval_seconds = interval_seconds
+        self.burst_interval_seconds = burst_interval_seconds
         self._stop = threading.Event()
+        self._burst = threading.Event()
         self._thread: threading.Thread | None = None
+        self._capture_thread: threading.Thread | None = None
+        self._frames = FrameBuffer()
 
     @property
     def running(self) -> bool:
@@ -40,32 +113,28 @@ class LiveCollector:
         if self.running:
             return
         self._stop.clear()
+        self._burst.clear()
+        self._frames = FrameBuffer()
         self._thread = threading.Thread(
             target=self._run,
-            name="blackflow-reward-live",
+            name="blackflow-reward-analyze",
             daemon=True,
         )
         self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
+        self._frames.wake()
 
-    def _run(self) -> None:
+    def _capture_loop(self) -> None:
         try:
             capture = MaaWindowCapture(self.window_title)
-            analyzer = FrameAnalyzer()
-            tracker = BattleSessionTracker(finalize_delay_seconds=1.0)
             self.events.put(
                 ("status", f"已只读连接：{capture.window_name}")
             )
-            previous_signature = None
-            previous_observation = FrameObservation(
-                ScreenKind.OTHER,
-                0.0,
-            )
-            last_saved_signature = None
-            pending_dir: Path | None = None
+            previous_signature: np.ndarray | None = None
             while not self._stop.is_set():
+                started = time.monotonic()
                 frame = capture.capture()
                 signature = frame_signature(frame)
                 changed = (
@@ -77,18 +146,84 @@ class LiveCollector:
                     >= 1.4
                 )
                 if changed:
-                    previous_observation = analyzer.analyze(frame)
-                    previous_signature = signature
-                    self.events.put(
-                        (
-                            "status",
-                            "画面："
-                            f"{previous_observation.kind.value} "
-                            f"({previous_observation.confidence:.0%})",
-                        )
+                    success, encoded = cv2.imencode(
+                        ".jpg",
+                        frame,
+                        (cv2.IMWRITE_JPEG_QUALITY, 94),
                     )
+                    if not success:
+                        raise RuntimeError("无法压缩采集帧")
+                    self._frames.put(
+                        CapturedFrame(
+                            jpeg=encoded.tobytes(),
+                            signature=signature,
+                            captured_at=time.monotonic(),
+                            epoch_ms=int(time.time() * 1000),
+                        ),
+                        burst=self._burst.is_set(),
+                    )
+                    previous_signature = signature
+                interval = (
+                    self.burst_interval_seconds
+                    if self._burst.is_set()
+                    else self.interval_seconds
+                )
+                elapsed = time.monotonic() - started
+                self._stop.wait(max(0.02, interval - elapsed))
+        except Exception as exc:
+            self._frames.set_error(exc)
+
+    def _run(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=1.0)
+        last_observation = FrameObservation(ScreenKind.OTHER, 0.0)
+        last_saved_signature: np.ndarray | None = None
+        pending_dir: Path | None = None
+        try:
+            self._capture_thread = threading.Thread(
+                target=self._capture_loop,
+                name="blackflow-reward-capture",
+                daemon=True,
+            )
+            self._capture_thread.start()
+            analyzer = FrameAnalyzer()
+            while not self._stop.is_set():
+                captured = self._frames.get(timeout=0.25)
+                if captured is None:
+                    if (
+                        last_observation.kind == ScreenKind.OTHER
+                        and tracker.pending is not None
+                    ):
+                        completed = tracker.offer(
+                            last_observation,
+                            now=time.monotonic(),
+                        )
+                        if completed is not None:
+                            self.events.put(("review", completed))
+                            self._burst.clear()
+                            pending_dir = None
+                            last_saved_signature = None
+                    continue
+
+                frame = captured.decode()
+                observation = analyzer.analyze(frame)
+                last_observation = observation
+                self.events.put(
+                    (
+                        "status",
+                        "画面："
+                        f"{observation.kind.value} "
+                        f"({observation.confidence:.0%}) "
+                        f"缓冲 {len(self._frames)}",
+                    )
+                )
+                if observation.kind in (
+                    ScreenKind.SETTLEMENT,
+                    ScreenKind.REWARDS,
+                ):
+                    self._burst.set()
+
                 screenshot_path = None
-                if previous_observation.kind in (
+                if observation.kind in (
                     ScreenKind.SETTLEMENT,
                     ScreenKind.REWARDS,
                 ):
@@ -103,7 +238,7 @@ class LiveCollector:
                     should_save = (
                         last_saved_signature is None
                         or signature_difference(
-                            signature,
+                            captured.signature,
                             last_saved_signature,
                         )
                         >= 1.4
@@ -112,40 +247,32 @@ class LiveCollector:
                         pending_dir.mkdir(parents=True, exist_ok=True)
                         prefix = (
                             "settlement"
-                            if previous_observation.kind
-                            == ScreenKind.SETTLEMENT
+                            if observation.kind == ScreenKind.SETTLEMENT
                             else "rewards"
                         )
                         screenshot_path = (
                             pending_dir
-                            / f"{prefix}-{int(time.time() * 1000)}.jpg"
+                            / f"{prefix}-{captured.epoch_ms}.jpg"
                         )
                         write_jpeg(screenshot_path, frame)
-                        last_saved_signature = signature.copy()
+                        last_saved_signature = captured.signature.copy()
+
                 completed = tracker.offer(
-                    previous_observation,
+                    observation,
                     screenshot_path=screenshot_path,
+                    now=captured.captured_at,
                 )
                 if completed is not None:
                     self.events.put(("review", completed))
+                    self._burst.clear()
                     pending_dir = None
                     last_saved_signature = None
-                if (
-                    previous_observation.kind == ScreenKind.SETTLEMENT
-                    and previous_observation.battle_command_xp is None
-                ):
-                    # Settlement UI is still animating. Re-capture as soon as
-                    # OCR returns so the completed XP panel is not skipped.
-                    sleep_seconds = 0.08
-                elif previous_observation.kind == ScreenKind.REWARDS:
-                    # Reward cards can disappear after one click.
-                    sleep_seconds = 0.12
-                else:
-                    sleep_seconds = max(0.25, self.interval_seconds)
-                time.sleep(sleep_seconds)
+
             completed = tracker.force_finalize()
             if completed is not None:
                 self.events.put(("review", completed))
             self.events.put(("status", "采集已停止"))
         except Exception as exc:
             self.events.put(("error", str(exc)))
+        finally:
+            self._burst.clear()
