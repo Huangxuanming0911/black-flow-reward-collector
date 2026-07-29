@@ -260,36 +260,63 @@ def _battle_command_xp(
     return None
 
 
+def _normalize_ticket_name(text: str) -> str | None:
+    compact = text.replace(" ", "").replace("卷", "券")
+    if "招募券" not in compact:
+        return None
+    known_match = re.search(
+        r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)"
+        r"招募券",
+        compact,
+    )
+    if known_match:
+        return known_match.group(0)
+    named_match = re.search(
+        r"([\u4e00-\u9fff]{1,10}招募券)",
+        compact,
+    )
+    if named_match:
+        return named_match.group(1)
+    return "招募券"
+
+
 def _reward_ticket_names(
     tokens: tuple[OCRToken, ...],
 ) -> tuple[str, ...]:
     ticket_names: list[str] = []
     for card in _reward_cards(tokens):
         for token in card.tokens:
-            compact = token.text.replace(" ", "").replace("卷", "券")
-            if "招募券" not in compact:
-                continue
-            known_match = re.search(
-                r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)"
-                r"招募券",
-                compact,
-            )
-            if known_match:
-                ticket_names.append(known_match.group(0))
+            ticket_name = _normalize_ticket_name(token.text)
+            if ticket_name:
+                ticket_names.append(ticket_name)
                 break
-            named_match = re.search(
-                r"([\u4e00-\u9fff]{1,10}招募券)",
-                compact,
-            )
-            ticket_names.append(
-                named_match.group(1) if named_match else compact
-            )
-            break
     return tuple(ticket_names)
 
 
 def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
     return len(_reward_ticket_names(tokens))
+
+
+def _reward_target_life(tokens: tuple[OCRToken, ...]) -> int | None:
+    total = 0
+    found = False
+    for card in _reward_cards(tokens):
+        card_text = "".join(
+            token.text.replace(" ", "") for token in card.tokens
+        )
+        if "目标生命" not in card_text:
+            continue
+        values: list[int] = []
+        for token in card.tokens:
+            compact = token.text.replace(" ", "").replace("＋", "+")
+            values.extend(
+                int(value)
+                for value in re.findall(r"\+(\d{1,2})", compact)
+            )
+        if values:
+            total += max(values)
+            found = True
+    return total if found else None
 
 
 def _reward_collectible_count(tokens: tuple[OCRToken, ...]) -> int:
@@ -379,6 +406,9 @@ def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
         if not text:
             continue
         compact = text.replace(" ", "")
+        ticket_name = _normalize_ticket_name(compact)
+        if ticket_name:
+            text = compact = ticket_name
         if compact in ignored or "收下" in compact:
             continue
         if len(compact) < 2 or len(compact) > 12:
@@ -631,6 +661,11 @@ def analyze_tokens(tokens: tuple[OCRToken, ...]) -> FrameObservation:
             _reward_ticket_names(tokens)
             if kind == ScreenKind.REWARDS
             else ()
+        ),
+        reward_target_life=(
+            _reward_target_life(tokens)
+            if kind == ScreenKind.REWARDS
+            else None
         ),
         reward_collectibles=(
             _reward_collectible_count(tokens)

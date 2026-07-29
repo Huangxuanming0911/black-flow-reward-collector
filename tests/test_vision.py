@@ -119,6 +119,22 @@ class VisionRuleTests(unittest.TestCase):
         result = analyze_tokens(tokens)
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_tickets, 1)
+        self.assertEqual(result.reward_ticket_names, ("重装招募券",))
+        self.assertEqual(
+            result.visible_reward_names,
+            ("重装招募券",),
+        )
+
+    def test_target_life_reward_is_read_inside_reward_card(self) -> None:
+        tokens = (
+            token("目标生命", 0.47, 0.49),
+            token("+1", 0.47, 0.58),
+            token("收下", 0.47, 0.73),
+            token("直接离开", 0.85, 0.57),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_target_life, 1)
 
     def test_distinct_protocol_tickets_are_counted_separately(self) -> None:
         tokens = (

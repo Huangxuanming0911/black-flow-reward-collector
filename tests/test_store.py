@@ -141,6 +141,7 @@ class RewardStoreTests(unittest.TestCase):
                 "sample-1",
                 recruitment_tickets=2,
                 parts=2,
+                target_life=1,
                 note="人工复核补记",
             )
             self.assertTrue(backup.exists())
@@ -148,6 +149,7 @@ class RewardStoreTests(unittest.TestCase):
             self.assertEqual(corrected["recruitment_tickets"], 2)
             self.assertEqual(corrected["parts"], 2)
             self.assertEqual(corrected["parts_total"], 2)
+            self.assertEqual(corrected["target_life"], 1)
             self.assertIn(
                 "人工复核补记",
                 corrected["reviewer_notes"],

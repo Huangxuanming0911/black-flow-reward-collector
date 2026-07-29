@@ -26,6 +26,7 @@ CSV_COLUMNS = (
     "normal_reward_ingots",
     "unowned_wealth_ingots",
     "hope",
+    "target_life",
     "recruitment_tickets",
     "collectibles",
     "parts",
@@ -130,14 +131,21 @@ class RewardStore:
         sample_id: str,
         recruitment_tickets: int | None = None,
         parts: int | None = None,
+        target_life: int | None = None,
         note: str = "",
     ) -> Path:
-        if recruitment_tickets is None and parts is None:
+        if (
+            recruitment_tickets is None
+            and parts is None
+            and target_life is None
+        ):
             raise ValueError("at least one reward count is required")
         if recruitment_tickets is not None and recruitment_tickets < 0:
             raise ValueError("recruitment ticket count cannot be negative")
         if parts is not None and parts < 0:
             raise ValueError("part count cannot be negative")
+        if target_life is not None and target_life < 0:
+            raise ValueError("target life cannot be negative")
         records = self.read_all()
         matches = [
             payload
@@ -156,6 +164,8 @@ class RewardStore:
             payload["parts"] = parts
             bonus_parts = int(payload.get("bonus_parts") or 0)
             payload["parts_total"] = parts + bonus_parts
+        if target_life is not None:
+            payload["target_life"] = target_life
         payload["schema_version"] = "0.3.0"
         if note:
             old_notes = str(payload.get("reviewer_notes", "")).strip()
@@ -261,6 +271,7 @@ class RewardStore:
                         "unowned_wealth_ingots"
                     ),
                     "mean_hope": mean("hope"),
+                    "mean_target_life": mean("target_life"),
                     "mean_recruitment_tickets": mean(
                         "recruitment_tickets"
                     ),

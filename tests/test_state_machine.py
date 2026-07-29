@@ -190,6 +190,40 @@ class BattleSessionTrackerTests(unittest.TestCase):
             {"重装招募券": 2},
         )
 
+    def test_generic_ticket_is_refined_without_double_counting(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=1,
+                reward_ticket_names=("招募券",),
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=1,
+                reward_ticket_names=("先锋招募券",),
+                reward_target_life=1,
+            ),
+            now=1.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.2),
+            now=2.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.reward_tickets, 1)
+        self.assertEqual(
+            completed.reward_ticket_names,
+            ["先锋招募券"],
+        )
+        self.assertEqual(completed.reward_target_life, 1)
+
     def test_collectible_part_grant_is_separate_from_node_parts(self) -> None:
         tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
         tracker.offer(

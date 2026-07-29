@@ -174,11 +174,6 @@ class BattleSessionTracker:
                 (pending.normal_reward_ingots or 0)
                 + (pending.unowned_wealth_ingots or 0)
             )
-        if observation.reward_tickets is not None:
-            pending.reward_tickets = max(
-                pending.reward_tickets or 0,
-                observation.reward_tickets,
-            )
         observed_ticket_counts = Counter(
             observation.reward_ticket_names
         )
@@ -190,9 +185,29 @@ class BattleSessionTracker:
                 count,
             )
         if pending.reward_ticket_name_counts:
+            specific_counts = {
+                name: count
+                for name, count in pending.reward_ticket_name_counts.items()
+                if name != "招募券"
+            }
+            generic_count = pending.reward_ticket_name_counts.get(
+                "招募券",
+                0,
+            )
+            specific_total = sum(specific_counts.values())
+            pending.reward_tickets = max(specific_total, generic_count)
+            pending.reward_ticket_names = list(specific_counts)
+            if not specific_counts and generic_count:
+                pending.reward_ticket_names.append("招募券")
+        elif observation.reward_tickets is not None:
             pending.reward_tickets = max(
                 pending.reward_tickets or 0,
-                sum(pending.reward_ticket_name_counts.values()),
+                observation.reward_tickets,
+            )
+        if observation.reward_target_life is not None:
+            pending.reward_target_life = max(
+                pending.reward_target_life or 0,
+                observation.reward_target_life,
             )
         if observation.reward_collectibles is not None:
             pending.reward_collectibles = max(

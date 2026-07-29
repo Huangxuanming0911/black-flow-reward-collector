@@ -56,6 +56,7 @@ class FrameObservation:
     unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
     reward_ticket_names: tuple[str, ...] = ()
+    reward_target_life: int | None = None
     reward_collectibles: int | None = None
     parts_box_used: int | None = None
     part_grant_effects: tuple[tuple[str, int], ...] = ()
@@ -86,6 +87,7 @@ class PendingBattle:
     reward_ticket_name_counts: dict[str, int] = field(
         default_factory=dict
     )
+    reward_target_life: int | None = None
     reward_collectibles: int | None = None
     parts_box_start: int | None = None
     parts_box_end: int | None = None
@@ -143,6 +145,7 @@ class RewardRecord:
     reward_screenshots: tuple[str, ...]
     ocr_text: str
     reviewer_notes: str
+    target_life: int = 0
     bonus_parts: int = 0
     parts_total: int = 0
     parts_bonus_details: str = ""

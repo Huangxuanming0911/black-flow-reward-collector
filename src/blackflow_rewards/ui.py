@@ -428,8 +428,8 @@ class ReviewDialog:
         self._topmost = topmost
         self._presented = False
         self.window.title("确认本场战斗奖励")
-        self.window.geometry("720x760")
-        self.window.minsize(680, 680)
+        self.window.geometry("720x800")
+        self.window.minsize(680, 720)
         if topmost:
             self.window.attributes("-topmost", True)
         self.window.transient(parent)
@@ -488,6 +488,9 @@ class ReviewDialog:
             value=str(self.pending.unowned_wealth_ingots or 0)
         )
         self.hope = tk.StringVar(value="0")
+        self.target_life = tk.StringVar(
+            value=str(self.pending.reward_target_life or 0)
+        )
         self.tickets = tk.StringVar(
             value=str(self.pending.reward_tickets or 0)
         )
@@ -555,26 +558,25 @@ class ReviewDialog:
             10,
             "希望",
             self.hope,
-            "招募券",
-            self.tickets,
+            "目标生命",
+            self.target_life,
         )
         self._number_pair(
             outer,
             11,
+            "招募券",
+            self.tickets,
             "收藏品",
             self.collectibles,
+        )
+        self._number_pair(
+            outer,
+            12,
             "节点奖励零件",
             self.parts,
+            "额外效果零件",
+            self.bonus_parts,
         )
-        ttk.Label(
-            outer,
-            text="额外效果零件",
-        ).grid(row=12, column=0, sticky="w", pady=4)
-        ttk.Entry(
-            outer,
-            textvariable=self.bonus_parts,
-            width=12,
-        ).grid(row=12, column=1, sticky="ew", padx=(10, 18), pady=4)
         parts_total = self.pending.parts_total or 0
         parts_details = (
             self.pending.parts_bonus_details or "未识别具体来源"
@@ -586,17 +588,17 @@ class ReviewDialog:
                 f"额外来源：{parts_details}"
             ),
             foreground="#555555",
-            wraplength=300,
+            wraplength=640,
         ).grid(
-            row=12,
-            column=2,
-            columnspan=2,
+            row=13,
+            column=0,
+            columnspan=4,
             sticky="w",
             pady=4,
         )
 
         ttk.Separator(outer).grid(
-            row=13,
+            row=14,
             column=0,
             columnspan=4,
             sticky="ew",
@@ -604,21 +606,21 @@ class ReviewDialog:
         )
         self._combo(
             outer,
-            14,
+            15,
             "额外来源",
             self.bonus,
             tuple(BONUS_NAMES.values()),
         )
-        self._entry(outer, 15, "额外来源详情", self.bonus_details)
+        self._entry(outer, 16, "额外来源详情", self.bonus_details)
         self._number_pair(
             outer,
-            16,
+            17,
             "经验倍率",
             self.xp_multiplier,
             "源石锭倍率",
             self.ingot_multiplier,
         )
-        self._entry(outer, 17, "人工备注", self.notes)
+        self._entry(outer, 18, "人工备注", self.notes)
 
         visible = "、".join(self.pending.visible_reward_names) or "未识别"
         ttk.Label(
@@ -626,7 +628,7 @@ class ReviewDialog:
             text=f"界面展示：{visible}",
             wraplength=640,
             foreground="#444444",
-        ).grid(row=18, column=0, columnspan=4, sticky="w", pady=(12, 4))
+        ).grid(row=19, column=0, columnspan=4, sticky="w", pady=(12, 4))
         evidence = "；".join(self.pending.context_evidence) or "使用手动预设"
         automatic_type = COMBAT_NAMES.get(
             self.pending.combat_context,
@@ -640,11 +642,11 @@ class ReviewDialog:
             ),
             wraplength=640,
             foreground="#555555",
-        ).grid(row=19, column=0, columnspan=4, sticky="w", pady=(0, 4))
+        ).grid(row=20, column=0, columnspan=4, sticky="w", pady=(0, 4))
 
         screenshot_frame = ttk.Frame(outer)
         screenshot_frame.grid(
-            row=20,
+            row=21,
             column=0,
             columnspan=4,
             sticky="w",
@@ -662,7 +664,7 @@ class ReviewDialog:
 
         buttons = ttk.Frame(outer)
         buttons.grid(
-            row=21,
+            row=22,
             column=0,
             columnspan=4,
             sticky="e",
@@ -811,6 +813,10 @@ class ReviewDialog:
                 normal_reward_ingots=normal_ingots,
                 unowned_wealth_ingots=unowned_ingots,
                 hope=self._int(self.hope.get(), "希望"),
+                target_life=self._int(
+                    self.target_life.get(),
+                    "目标生命",
+                ),
                 recruitment_tickets=self._int(
                     self.tickets.get(),
                     "招募券",
