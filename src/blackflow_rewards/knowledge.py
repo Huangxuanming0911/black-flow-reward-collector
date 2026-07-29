@@ -13,8 +13,10 @@ KNOWN_COLLECTIBLE_PART_GRANTS: dict[str, int] = {
 KNOWN_STAGE_CONTEXTS: dict[str, str] = {
     "搏杀": "encounter",
     "共斗": "encounter",
-    "强买强卖": "resident_base",
-    "进退趋同": "resident_base",
-    "枯枝": "resident_occupied",
-    "败叶": "resident_occupied",
+    # Flowing residents temporarily occupying an ordinary node.
+    "强买强卖": "resident_occupied",
+    "进退趋同": "resident_occupied",
+    # The red “居民”据点 itself.
+    "枯枝": "resident_base",
+    "败叶": "resident_base",
 }

@@ -8,6 +8,35 @@ from blackflow_rewards.state_machine import BattleSessionTracker
 
 
 class BattleSessionTrackerTests(unittest.TestCase):
+    def test_explicit_resident_base_survives_generic_notice(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.OTHER,
+                0.35,
+                combat_context="resident_base",
+                context_evidence=("combat_text:“居民”据点",),
+            ),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.SETTLEMENT,
+                0.98,
+                stage_name="败叶",
+                combat_context="resident_base",
+                context_evidence=(
+                    "settlement_notice:resident_disappeared",
+                    "stage_context:败叶",
+                ),
+            ),
+            now=1.0,
+        )
+        completed = tracker.force_finalize()
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.combat_context, "resident_base")
+
     def test_settlement_rewards_then_other_emits_one_review(self) -> None:
         tracker = BattleSessionTracker(finalize_delay_seconds=2.0)
         settlement = FrameObservation(

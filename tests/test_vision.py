@@ -258,7 +258,7 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_collectibles, 0)
 
-    def test_resident_disappearance_notice_sets_node_type(self) -> None:
+    def test_resident_base_notice_and_stage_set_node_type(self) -> None:
         tokens = (
             token("成功通过", 0.12, 0.79),
             token("本次作战", 0.75, 0.36),
@@ -272,7 +272,7 @@ class VisionRuleTests(unittest.TestCase):
         )
         result = analyze_tokens(tokens)
         self.assertEqual(result.kind, ScreenKind.SETTLEMENT)
-        self.assertEqual(result.combat_context, "resident_occupied")
+        self.assertEqual(result.combat_context, "resident_base")
 
     def test_pursuit_status_on_map_is_not_a_node_type(self) -> None:
         result = analyze_tokens(
@@ -303,7 +303,7 @@ class VisionRuleTests(unittest.TestCase):
             result.context_evidence,
         )
 
-    def test_resident_base_stage_overrides_emergency_header(self) -> None:
+    def test_resident_occupied_stage_overrides_emergency_header(self) -> None:
         tokens = (
             token("成功通过", 0.16, 0.70),
             token("本次作战", 0.66, 0.35),
@@ -313,13 +313,13 @@ class VisionRuleTests(unittest.TestCase):
         )
         result = analyze_tokens(tokens)
         self.assertEqual(result.stage_name, "进退趋同")
-        self.assertEqual(result.combat_context, "resident_base")
+        self.assertEqual(result.combat_context, "resident_occupied")
         self.assertIn(
             "stage_context:进退趋同",
             result.context_evidence,
         )
 
-    def test_resident_occupied_stage_overrides_generic_combat(self) -> None:
+    def test_resident_base_stage_overrides_generic_combat(self) -> None:
         tokens = (
             token("成功通过", 0.16, 0.70),
             token("本次作战", 0.66, 0.35),
@@ -331,7 +331,7 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.stage_name, "败叶")
         self.assertEqual(
             result.combat_context,
-            "resident_occupied",
+            "resident_base",
         )
         self.assertIn(
             "stage_context:败叶",

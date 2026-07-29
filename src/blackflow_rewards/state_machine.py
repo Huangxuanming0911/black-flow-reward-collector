@@ -13,6 +13,10 @@ from .models import FrameObservation, PendingBattle, ScreenKind
 def _prefer_combat_context(existing: str, incoming: str) -> str:
     if not incoming:
         return existing
+    # An explicit pre-battle “居民”据点 header is stronger than the generic
+    # post-battle resident-disappearance notice.
+    if existing == "resident_base" and incoming == "resident_occupied":
+        return existing
     if existing and existing != "combat" and incoming == "combat":
         return existing
     return incoming
