@@ -35,6 +35,8 @@ def record(sample_id: str, bonus_source: str) -> RewardRecord:
         reward_screenshots=("b.jpg",),
         ocr_text="",
         reviewer_notes="",
+        detected_combat_context="emergency_combat",
+        context_evidence=("combat_text:紧急作战",),
     )
 
 
@@ -45,11 +47,24 @@ class RewardStoreTests(unittest.TestCase):
             store.append(record("base", "none"))
             store.append(record("bonus", "chest"))
             self.assertEqual(len(store.read_all()), 2)
+            self.assertEqual(
+                store.read_all()[0]["context_evidence"],
+                ["combat_text:紧急作战"],
+            )
             with store.csv_path.open(
                 encoding="utf-8-sig",
                 newline="",
             ) as stream:
-                self.assertEqual(len(list(csv.DictReader(stream))), 2)
+                rows = list(csv.DictReader(stream))
+                self.assertEqual(len(rows), 2)
+                self.assertEqual(
+                    rows[0]["detected_combat_context"],
+                    "emergency_combat",
+                )
+                self.assertEqual(
+                    rows[0]["context_evidence"],
+                    "combat_text:紧急作战",
+                )
             summary = json.loads(
                 store.summary_path.read_text(encoding="utf-8")
             )

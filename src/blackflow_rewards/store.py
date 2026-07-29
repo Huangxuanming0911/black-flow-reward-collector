@@ -18,6 +18,8 @@ CSV_COLUMNS = (
     "source_floor",
     "location_context",
     "combat_context",
+    "detected_combat_context",
+    "context_evidence",
     "stage_name",
     "command_xp",
     "originium_ingots",
@@ -210,6 +212,7 @@ class RewardStore:
                     "displayed_reward_names",
                     "settlement_screenshots",
                     "reward_screenshots",
+                    "context_evidence",
                 ):
                     value = row[key]
                     if isinstance(value, list):

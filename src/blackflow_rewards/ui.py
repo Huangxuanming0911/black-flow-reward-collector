@@ -832,6 +832,8 @@ class ReviewDialog:
                     )
                 ),
                 parts_bonus_details=self.pending.parts_bonus_details,
+                detected_combat_context=self.pending.combat_context,
+                context_evidence=tuple(self.pending.context_evidence),
                 bonus_source=BONUS_IDS[self.bonus.get()],
                 bonus_details=self.bonus_details.get().strip(),
                 command_xp_multiplier=self._float(

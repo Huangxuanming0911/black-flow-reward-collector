@@ -146,6 +146,8 @@ class RewardRecord:
     bonus_parts: int = 0
     parts_total: int = 0
     parts_bonus_details: str = ""
+    detected_combat_context: str = ""
+    context_evidence: tuple[str, ...] = ()
     review_status: str = "confirmed"
     schema_version: str = "0.3.0"
 
