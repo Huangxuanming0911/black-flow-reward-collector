@@ -87,7 +87,10 @@ def _reward_cards(
             for token in tokens
             if left <= token.center_x < right
             and abs(token.center_x - action.center_x) <= 0.14
-            and 0.30 <= token.center_y <= 0.70
+            # Include the category label above the card artwork, such as
+            # "加工品". It is essential for distinguishing a part from a
+            # collectible during overlapping choice animations.
+            and 0.15 <= token.center_y <= 0.70
         )
         title_candidates = [
             token
@@ -296,14 +299,23 @@ def _reward_collectible_count(tokens: tuple[OCRToken, ...]) -> int:
     for card in _reward_cards(tokens):
         if "收下" not in card.action.text:
             continue
-        column_text = "".join(
+        card_text = "".join(
+            token.text.replace(" ", "")
+            for token in card.tokens
+        )
+        reward_body_text = "".join(
             token.text.replace(" ", "")
             for token in card.tokens
             if 0.38 <= token.center_y <= 0.62
         )
-        if "源石锭" in column_text:
+        if "加工品" in card_text:
             continue
-        if "招募券" in column_text or "招募卷" in column_text:
+        if "源石锭" in reward_body_text:
+            continue
+        if (
+            "招募券" in reward_body_text
+            or "招募卷" in reward_body_text
+        ):
             continue
         count += 1
     return count

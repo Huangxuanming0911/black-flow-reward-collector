@@ -228,6 +228,20 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.kind, ScreenKind.REWARDS)
         self.assertEqual(result.reward_collectibles, 0)
 
+    def test_processing_part_cards_are_not_collectibles(self) -> None:
+        tokens = (
+            token("加工品", 0.35, 0.18),
+            token("标准引擎", 0.39, 0.46),
+            token("收下", 0.39, 0.69),
+            token("加工品", 0.57, 0.18),
+            token("一次性喷气背包", 0.61, 0.46),
+            token("收下", 0.61, 0.69),
+            token("直接离开", 0.82, 0.57),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.reward_collectibles, 0)
+
     def test_resident_disappearance_notice_sets_node_type(self) -> None:
         tokens = (
             token("成功通过", 0.12, 0.79),
