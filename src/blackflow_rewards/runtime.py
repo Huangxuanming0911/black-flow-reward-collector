@@ -109,6 +109,10 @@ class FrameBuffer:
         with self._condition:
             self._condition.notify_all()
 
+    def clear(self) -> None:
+        with self._condition:
+            self._items.clear()
+
     def __len__(self) -> int:
         with self._condition:
             return len(self._items)
@@ -130,6 +134,7 @@ class LiveCollector:
         self.burst_interval_seconds = burst_interval_seconds
         self._stop = threading.Event()
         self._burst = threading.Event()
+        self._reviewing = threading.Event()
         self._thread: threading.Thread | None = None
         self._capture_thread: threading.Thread | None = None
         self._frames = FrameBuffer()
@@ -139,11 +144,16 @@ class LiveCollector:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
+    @property
+    def reviewing(self) -> bool:
+        return self._reviewing.is_set()
+
     def start(self) -> None:
         if self.running:
             return
         self._stop.clear()
         self._burst.clear()
+        self._reviewing.clear()
         self._frames = FrameBuffer()
         self._last_phase = ""
         self._thread = threading.Thread(
@@ -163,6 +173,21 @@ class LiveCollector:
         self._stop.set()
         self._frames.wake()
 
+    def resume_after_review(self) -> None:
+        # Frames captured while the modal dialog was open belong to neither a
+        # clean end state nor a new battle. Drop them and resume from a fresh
+        # screenshot after the user closes the review.
+        self._frames.clear()
+        self._reviewing.clear()
+        self._frames.wake()
+
+    def _deliver_review(self, completed: object) -> None:
+        self._reviewing.set()
+        self._emit_phase("review")
+        self.events.put(("review", completed))
+        while self._reviewing.is_set() and not self._stop.is_set():
+            self._stop.wait(0.1)
+
     def _capture_loop(self) -> None:
         try:
             capture = MaaWindowCapture(self.window_title)
@@ -172,6 +197,10 @@ class LiveCollector:
             self._emit_phase("monitoring")
             previous_signature: np.ndarray | None = None
             while not self._stop.is_set():
+                if self._reviewing.is_set():
+                    previous_signature = None
+                    self._stop.wait(0.1)
+                    continue
                 started = time.monotonic()
                 frame = capture.capture()
                 signature = frame_signature(frame)
@@ -215,7 +244,10 @@ class LiveCollector:
         # Reward cards are shown one by one and their transition animations
         # can briefly look like an unrelated screen. Keep the same battle
         # alive long enough for later ingot/collectible/ticket cards to arrive.
-        tracker = BattleSessionTracker(finalize_delay_seconds=5.0)
+        # A generic OTHER frame can be an upgrade, recruitment, or choice
+        # page inside the same post-battle flow. Only a recognized node map
+        # finalizes quickly; the long timeout is a last-resort safety net.
+        tracker = BattleSessionTracker(finalize_delay_seconds=30.0)
         last_observation = FrameObservation(ScreenKind.OTHER, 0.0)
         last_saved_signature: np.ndarray | None = None
         pending_dir: Path | None = None
@@ -239,8 +271,7 @@ class LiveCollector:
                             now=time.monotonic(),
                         )
                         if completed is not None:
-                            self._emit_phase("review")
-                            self.events.put(("review", completed))
+                            self._deliver_review(completed)
                             self._burst.clear()
                             pending_dir = None
                             last_saved_signature = None
@@ -249,15 +280,6 @@ class LiveCollector:
                 frame = captured.decode()
                 observation = analyzer.analyze(frame)
                 last_observation = observation
-                self.events.put(
-                    (
-                        "status",
-                        "画面："
-                        f"{observation.kind.value} "
-                        f"({observation.confidence:.0%}) "
-                        f"缓冲 {len(self._frames)}",
-                    )
-                )
                 if observation.kind in (
                     ScreenKind.SETTLEMENT,
                     ScreenKind.REWARDS,
@@ -270,20 +292,20 @@ class LiveCollector:
                     self._emit_phase("settlement")
                 elif (
                     observation.kind == ScreenKind.REWARDS
-                    and (
-                        tracker.pending is None
-                        or not tracker.pending.saw_rewards
-                    )
                 ):
                     self._emit_phase("rewards")
                 elif (
                     observation.kind == ScreenKind.OTHER
                     and tracker.pending is not None
                     and tracker.pending.saw_rewards
-                    and "main_map_hud:action_points"
-                    in observation.context_evidence
                 ):
-                    self._emit_phase("finalizing")
+                    returned_to_map = any(
+                        item.startswith("main_map_hud:")
+                        for item in observation.context_evidence
+                    )
+                    self._emit_phase(
+                        "finalizing" if returned_to_map else "organizing"
+                    )
 
                 screenshot_path = None
                 if observation.kind in (
@@ -326,16 +348,54 @@ class LiveCollector:
                     now=captured.captured_at,
                 )
                 if completed is not None:
-                    self._emit_phase("review")
-                    self.events.put(("review", completed))
+                    self._deliver_review(completed)
                     self._burst.clear()
                     pending_dir = None
                     last_saved_signature = None
+                elif tracker.pending is None:
+                    self.events.put(
+                        (
+                            "status",
+                            f"后台监控中 · OCR 缓冲 {len(self._frames)} 帧",
+                        )
+                    )
+                elif (
+                    tracker.pending.saw_rewards
+                    and observation.kind == ScreenKind.REWARDS
+                ):
+                    self.events.put(
+                        (
+                            "status",
+                            "奖励识别中 · "
+                            f"已缓存奖励截图 "
+                            f"{len(tracker.pending.reward_screenshots)} 张 · "
+                            f"OCR 缓冲 {len(self._frames)} 帧",
+                        )
+                    )
+                elif tracker.pending.saw_rewards:
+                    self.events.put(
+                        (
+                            "status",
+                            "正在整理本场数据 · "
+                            f"已缓存奖励截图 "
+                            f"{len(tracker.pending.reward_screenshots)} 张 · "
+                            f"OCR 缓冲 {len(self._frames)} 帧",
+                        )
+                    )
+                else:
+                    self.events.put(
+                        (
+                            "status",
+                            "本场记录已建立 · "
+                            f"已缓存结算截图 "
+                            f"{len(tracker.pending.settlement_screenshots)} 张 · "
+                            "等待奖励页面",
+                        )
+                    )
 
             completed = tracker.force_finalize()
             if completed is not None:
-                self._emit_phase("review")
-                self.events.put(("review", completed))
+                self._deliver_review(completed)
             self._emit_phase("stopped")
             self.events.put(("status", "采集已停止"))
         except Exception as exc:

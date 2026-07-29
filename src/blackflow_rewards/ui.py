@@ -34,6 +34,7 @@ PHASE_LABELS = {
     "monitoring": "● 正在监控，等待战斗结算",
     "settlement": "● 已捕获结算，正在等待奖励",
     "rewards": "● 正在记录本场奖励",
+    "organizing": "◌ 正在整理本场数据并等待回图",
     "finalizing": "● 已返回地图，正在生成统计",
     "review": "● 等待确认本场统计",
     "stopping": "◌ 正在停止",
@@ -47,6 +48,7 @@ PHASE_STYLES = {
     "monitoring": "Phase.Ready.TLabel",
     "settlement": "Phase.Capture.TLabel",
     "rewards": "Phase.Capture.TLabel",
+    "organizing": "Phase.Active.TLabel",
     "finalizing": "Phase.Active.TLabel",
     "review": "Phase.Review.TLabel",
     "stopping": "Phase.Active.TLabel",
@@ -220,7 +222,7 @@ class CollectorApp:
             status,
             text=(
                 "提示：奖励出现后正常领取；明确返回地图约 1 秒后弹窗，"
-                "无法确认回图时使用 5 秒兜底。"
+                "中间的升级/招募页面会继续归入同一场，不必手动停止。"
             ),
             foreground="#555555",
             wraplength=500,
@@ -298,8 +300,25 @@ class CollectorApp:
             "monitoring": "采集已启动：正在后台等待结算",
             "settlement": "已捕获结算：正在等待经验与奖励页面",
             "rewards": "正在记录：请正常领取全部奖励",
-            "finalizing": "已确认返回地图：即将打开统计",
+            "organizing": "正在整理本场数据：缓存仍在处理，等待确认返回地图",
+            "finalizing": "已确认返回地图：整理最后缓存，约 1 秒后弹窗",
+            "review": "本场数据整理完成：请确认统计结果",
         }
+        status_messages = {
+            "connecting": "正在连接游戏窗口并初始化 OCR……",
+            "monitoring": "后台监控中，等待下一场战斗结算。",
+            "settlement": "结算已捕获，正在缓存经验画面并等待奖励。",
+            "rewards": "奖励识别中，请继续正常领取、选择或招募。",
+            "organizing": (
+                "奖励页面暂时离开；正在整理缓存并确认是否已返回地图。"
+            ),
+            "finalizing": "地图已确认，正在合并本场全部识别结果。",
+            "review": "本场数据已整理完成，等待人工确认。",
+            "stopping": "正在停止采集并整理尚未确认的本场数据。",
+            "stopped": "采集已停止。",
+        }
+        if phase in status_messages:
+            self.status_var.set(status_messages[phase])
         if phase in messages:
             self._show_toast(messages[phase])
 
@@ -388,26 +407,30 @@ class CollectorApp:
             topmost=self.topmost_var.get(),
         )
         self.root.wait_window(dialog.window)
-        if dialog.record is None:
+        try:
+            if dialog.record is None:
+                if self.live.running:
+                    self._set_phase("monitoring")
+                return
+            self.store.append(dialog.record)
+            self.floor_var.set(dialog.record.source_floor)
+            self.location_var.set(
+                LOCATION_NAMES[dialog.record.location_context]
+            )
+            self.combat_var.set(
+                COMBAT_NAMES[dialog.record.combat_context]
+            )
+            self.count_var.set(
+                f"已保存样本：{len(self.store.read_all())}"
+            )
+            self.status_var.set(
+                f"已保存：{dialog.record.stage_name or dialog.record.sample_id}"
+            )
             if self.live.running:
                 self._set_phase("monitoring")
-            return
-        self.store.append(dialog.record)
-        self.floor_var.set(dialog.record.source_floor)
-        self.location_var.set(
-            LOCATION_NAMES[dialog.record.location_context]
-        )
-        self.combat_var.set(
-            COMBAT_NAMES[dialog.record.combat_context]
-        )
-        self.count_var.set(
-            f"已保存样本：{len(self.store.read_all())}"
-        )
-        self.status_var.set(
-            f"已保存：{dialog.record.stage_name or dialog.record.sample_id}"
-        )
-        if self.live.running:
-            self._set_phase("monitoring")
+        finally:
+            if self.live.reviewing:
+                self.live.resume_after_review()
 
     def _close(self) -> None:
         self.live.stop()

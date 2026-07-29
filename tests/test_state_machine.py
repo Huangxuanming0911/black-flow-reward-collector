@@ -387,6 +387,49 @@ class BattleSessionTrackerTests(unittest.TestCase):
         assert completed is not None
         self.assertEqual(completed.reward_tickets, 1)
 
+    def test_intermediate_page_does_not_split_later_rewards(self) -> None:
+        tracker = BattleSessionTracker(
+            finalize_delay_seconds=30.0,
+            map_return_delay_seconds=1.0,
+        )
+        tracker.offer(
+            FrameObservation(ScreenKind.SETTLEMENT, 0.98),
+            now=0.0,
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_ticket_names=("先锋招募券",),
+            ),
+            now=1.0,
+        )
+        self.assertIsNone(
+            tracker.offer(
+                FrameObservation(ScreenKind.OTHER, 0.3),
+                now=12.0,
+            )
+        )
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_ticket_names=("医疗招募券",),
+            ),
+            now=20.0,
+        )
+        returned_map = FrameObservation(
+            ScreenKind.OTHER,
+            0.8,
+            location_context="main_map",
+            context_evidence=("main_map_hud:node_map",),
+        )
+        self.assertIsNone(tracker.offer(returned_map, now=21.0))
+        completed = tracker.offer(returned_map, now=22.1)
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.reward_tickets, 2)
+
     def test_map_before_rewards_keeps_settlement_grace(self) -> None:
         tracker = BattleSessionTracker(
             settlement_grace_seconds=30.0,

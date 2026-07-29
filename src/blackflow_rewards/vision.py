@@ -41,6 +41,30 @@ _ROMAN_FLOORS = {
     "VI": "6",
 }
 
+_MAP_NODE_MARKERS = (
+    "未知的凶戾",
+    "未知的诡秘",
+    "作战",
+    "紧急作战",
+    "险路尽头",
+    "险路小径",
+    "险路恶敌",
+    "诡意行商",
+    "秘境行商",
+    "失与得",
+    "先行一步",
+    "羽瞰点",
+    "曲折密道",
+    "曲径密道",
+    "林间空地",
+    "命运所指",
+    "狭路相逢",
+    "不期而遇",
+    "居民据点",
+    "误入奇境",
+    "得偿所愿",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class _RewardCard:
@@ -542,6 +566,32 @@ def _page_context(
     ):
         location_context = "main_map"
         evidence.append("main_map_hud:action_points")
+    if kind == ScreenKind.OTHER:
+        all_compact = tuple(
+            token.text.replace(" ", "").replace("“", "").replace("”", "")
+            for token in tokens
+        )
+        has_bottom_hud = (
+            any("零件箱" in text for text in all_compact)
+            and any(
+                marker in text
+                for text in all_compact
+                for marker in ("收藏品", "干员", "编队")
+            )
+        )
+        node_marker_count = sum(
+            any(marker in text for marker in _MAP_NODE_MARKERS)
+            for text in all_compact
+        )
+        has_position_marker = any(
+            "YOUAREHERE" in text.upper() for text in all_compact
+        )
+        if has_bottom_hud and (
+            node_marker_count >= 1 or has_position_marker
+        ):
+            location_context = "main_map"
+            if "main_map_hud:node_map" not in evidence:
+                evidence.append("main_map_hud:node_map")
 
     if kind == ScreenKind.SETTLEMENT:
         context_tokens = tuple(

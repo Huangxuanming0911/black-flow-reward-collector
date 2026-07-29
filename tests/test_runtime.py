@@ -46,6 +46,14 @@ class FrameBufferTests(unittest.TestCase):
         self.assertIn(50, retained)
         self.assertEqual(retained[-1], 51)
 
+    def test_clear_drops_frames_left_before_review(self) -> None:
+        buffer = FrameBuffer(normal_limit=3, burst_limit=5)
+        buffer.put(frame(1), burst=False)
+        buffer.put(frame(2), burst=False)
+        buffer.clear()
+        self.assertEqual(len(buffer), 0)
+        self.assertIsNone(buffer.get(0.0))
+
 
 if __name__ == "__main__":
     unittest.main()

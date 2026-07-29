@@ -362,6 +362,22 @@ class VisionRuleTests(unittest.TestCase):
             result.context_evidence,
         )
 
+    def test_node_labels_and_bottom_hud_mark_main_map(self) -> None:
+        result = analyze_tokens(
+            (
+                token("未知的诡秘", 0.40, 0.42),
+                token("零件箱", 0.65, 0.925),
+                token("收藏品", 0.16, 0.925),
+                token("干员", 0.76, 0.925),
+            )
+        )
+        self.assertEqual(result.kind, ScreenKind.OTHER)
+        self.assertEqual(result.location_context, "main_map")
+        self.assertIn(
+            "main_map_hud:node_map",
+            result.context_evidence,
+        )
+
     def test_hidden_area_is_a_location_not_a_battle_type(self) -> None:
         tokens = (
             token("未萌生的摇篮", 0.52, 0.03),

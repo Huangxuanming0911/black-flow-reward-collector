@@ -75,8 +75,10 @@ class BattleSessionTracker:
             return None
         returned_to_map = (
             self.pending.saw_rewards
-            and "main_map_hud:action_points"
-            in observation.context_evidence
+            and any(
+                item.startswith("main_map_hud:")
+                for item in observation.context_evidence
+            )
         )
         if returned_to_map:
             if self._map_returned_at is None:
