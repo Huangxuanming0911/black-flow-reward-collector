@@ -287,6 +287,41 @@ class VisionRuleTests(unittest.TestCase):
             result.context_evidence,
         )
 
+    def test_resident_base_stage_overrides_emergency_header(self) -> None:
+        tokens = (
+            token("成功通过", 0.16, 0.70),
+            token("本次作战", 0.66, 0.35),
+            token("紧急作战", 0.10, 0.50),
+            token("进退趋同", 0.16, 0.58),
+            token("21", 0.65, 0.42),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.stage_name, "进退趋同")
+        self.assertEqual(result.combat_context, "resident_base")
+        self.assertIn(
+            "stage_context:进退趋同",
+            result.context_evidence,
+        )
+
+    def test_resident_occupied_stage_overrides_generic_combat(self) -> None:
+        tokens = (
+            token("成功通过", 0.16, 0.70),
+            token("本次作战", 0.66, 0.35),
+            token("作战", 0.10, 0.50),
+            token("败叶", 0.16, 0.58),
+            token("36", 0.65, 0.42),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.stage_name, "败叶")
+        self.assertEqual(
+            result.combat_context,
+            "resident_occupied",
+        )
+        self.assertIn(
+            "stage_context:败叶",
+            result.context_evidence,
+        )
+
     def test_top_area_title_extracts_floor_and_location(self) -> None:
         tokens = (
             token("血色空脉", 0.50, 0.04),
