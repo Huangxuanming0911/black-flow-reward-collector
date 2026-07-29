@@ -144,6 +144,45 @@ class VisionRuleTests(unittest.TestCase):
         self.assertEqual(result.reward_ticket_names, ("重装招募券",))
         self.assertIn("重装招募券", result.visible_reward_names)
 
+    def test_reward_cards_are_discovered_from_all_visible_buttons(self) -> None:
+        positions = (0.06, 0.20, 0.34, 0.48, 0.62, 0.76, 0.90)
+        titles = (
+            "奖励一",
+            "奖励二",
+            "奖励三",
+            "奖励四",
+            "奖励五",
+            "奖励六",
+            "医疗招募券",
+        )
+        tokens = tuple(
+            item
+            for x, title in zip(positions, titles, strict=True)
+            for item in (
+                token(title, x, 0.49),
+                token("收下", x, 0.73),
+            )
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.kind, ScreenKind.REWARDS)
+        self.assertEqual(result.visible_reward_names, titles)
+        self.assertEqual(result.reward_tickets, 1)
+        self.assertEqual(result.reward_ticket_names, ("医疗招募券",))
+
+    def test_identical_ticket_cards_are_counted_separately(self) -> None:
+        tokens = (
+            token("重装招募券", 0.30, 0.49),
+            token("收下", 0.30, 0.73),
+            token("重装招募券", 0.70, 0.49),
+            token("收下", 0.70, 0.73),
+        )
+        result = analyze_tokens(tokens)
+        self.assertEqual(result.reward_tickets, 2)
+        self.assertEqual(
+            result.reward_ticket_names,
+            ("重装招募券", "重装招募券"),
+        )
+
     def test_direct_collectible_and_parts_box_are_read(self) -> None:
         tokens = (
             token("残破合影", 0.30, 0.49),

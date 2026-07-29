@@ -164,6 +164,32 @@ class BattleSessionTrackerTests(unittest.TestCase):
             ["重装招募券", "远程协议招募券"],
         )
 
+    def test_identical_tickets_visible_together_keep_multiplicity(self) -> None:
+        tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
+        tracker.offer(
+            FrameObservation(
+                ScreenKind.REWARDS,
+                0.96,
+                reward_tickets=2,
+                reward_ticket_names=(
+                    "重装招募券",
+                    "重装招募券",
+                ),
+            ),
+            now=0.0,
+        )
+        completed = tracker.offer(
+            FrameObservation(ScreenKind.OTHER, 0.2),
+            now=1.0,
+        )
+        self.assertIsNotNone(completed)
+        assert completed is not None
+        self.assertEqual(completed.reward_tickets, 2)
+        self.assertEqual(
+            completed.reward_ticket_name_counts,
+            {"重装招募券": 2},
+        )
+
     def test_collectible_part_grant_is_separate_from_node_parts(self) -> None:
         tracker = BattleSessionTracker(finalize_delay_seconds=0.0)
         tracker.offer(

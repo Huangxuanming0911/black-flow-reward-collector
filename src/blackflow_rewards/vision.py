@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any
 
 import cv2
@@ -39,6 +40,73 @@ _ROMAN_FLOORS = {
     "V": "5",
     "VI": "6",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _RewardCard:
+    action: OCRToken
+    tokens: tuple[OCRToken, ...]
+    title: str
+
+
+def _reward_cards(
+    tokens: tuple[OCRToken, ...],
+) -> tuple[_RewardCard, ...]:
+    """Find every currently visible reward card from its action button.
+
+    Card count and x positions are deliberately not fixed. As rewards are
+    claimed, later cards can slide into the row; every analyzed frame yields
+    a fresh set of button-anchored columns for the session merger.
+    """
+    actions = sorted(
+        (
+            token
+            for token in tokens
+            if 0.62 <= token.center_y <= 0.80
+            and (
+                "收下" in token.text.replace(" ", "")
+                or token.text.replace(" ", "") == "选择"
+            )
+        ),
+        key=lambda token: token.center_x,
+    )
+    cards: list[_RewardCard] = []
+    for index, action in enumerate(actions):
+        left = (
+            0.0
+            if index == 0
+            else (actions[index - 1].center_x + action.center_x) / 2
+        )
+        right = (
+            1.0
+            if index == len(actions) - 1
+            else (action.center_x + actions[index + 1].center_x) / 2
+        )
+        column_tokens = tuple(
+            token
+            for token in tokens
+            if left <= token.center_x < right
+            and abs(token.center_x - action.center_x) <= 0.14
+            and 0.30 <= token.center_y <= 0.70
+        )
+        title_candidates = [
+            token
+            for token in column_tokens
+            if 0.43 <= token.center_y <= 0.53
+            and 2 <= len(token.text.replace(" ", "")) <= 16
+        ]
+        title = ""
+        if title_candidates:
+            title = min(
+                title_candidates,
+                key=lambda token: (
+                    abs(token.center_x - action.center_x),
+                    abs(token.center_y - 0.49),
+                    -token.confidence,
+                ),
+            ).text.strip()
+        cards.append(_RewardCard(action, column_tokens, title))
+    return tuple(cards)
 
 
 def _token_from_raw(
@@ -192,34 +260,29 @@ def _battle_command_xp(
 def _reward_ticket_names(
     tokens: tuple[OCRToken, ...],
 ) -> tuple[str, ...]:
-    ticket_types: set[str] = set()
-    for token in tokens:
-        # Reward rows can extend to a fifth card near the right edge.
-        # "Direct leave" never contains a ticket title, so scanning the
-        # complete card strip is safer than clipping after four cards.
-        if not (0.03 <= token.center_x <= 0.96):
-            continue
-        if not (0.30 <= token.center_y <= 0.70):
-            continue
-        compact = token.text.replace(" ", "").replace("卷", "券")
-        if "招募券" not in compact:
-            continue
-        known_match = re.search(
-            r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)"
-            r"招募券",
-            compact,
-        )
-        if known_match:
-            ticket_types.add(known_match.group(0))
-            continue
-        named_match = re.search(
-            r"([\u4e00-\u9fff]{1,10}招募券)",
-            compact,
-        )
-        ticket_types.add(
-            named_match.group(1) if named_match else compact
-        )
-    return tuple(sorted(ticket_types))
+    ticket_names: list[str] = []
+    for card in _reward_cards(tokens):
+        for token in card.tokens:
+            compact = token.text.replace(" ", "").replace("卷", "券")
+            if "招募券" not in compact:
+                continue
+            known_match = re.search(
+                r"(先锋|近卫|重装|狙击|术师|医疗|辅助|特种|高级资深)"
+                r"招募券",
+                compact,
+            )
+            if known_match:
+                ticket_names.append(known_match.group(0))
+                break
+            named_match = re.search(
+                r"([\u4e00-\u9fff]{1,10}招募券)",
+                compact,
+            )
+            ticket_names.append(
+                named_match.group(1) if named_match else compact
+            )
+            break
+    return tuple(ticket_names)
 
 
 def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
@@ -229,20 +292,14 @@ def _reward_ticket_count(tokens: tuple[OCRToken, ...]) -> int:
 def _reward_collectible_count(tokens: tuple[OCRToken, ...]) -> int:
     if any(token.text.replace(" ", "") == "或是" for token in tokens):
         return 0
-    take_buttons = [
-        token
-        for token in tokens
-        if "收下" in token.text
-        and 0.62 <= token.center_y <= 0.80
-        and token.center_x <= 0.96
-    ]
     count = 0
-    for button in take_buttons:
+    for card in _reward_cards(tokens):
+        if "收下" not in card.action.text:
+            continue
         column_text = "".join(
             token.text.replace(" ", "")
-            for token in tokens
-            if abs(token.center_x - button.center_x) <= 0.085
-            and 0.38 <= token.center_y <= 0.62
+            for token in card.tokens
+            if 0.38 <= token.center_y <= 0.62
         )
         if "源石锭" in column_text:
             continue
@@ -272,26 +329,23 @@ def _part_grant_effects(
     tokens: tuple[OCRToken, ...],
 ) -> tuple[tuple[str, int], ...]:
     effects: list[tuple[str, int]] = []
-    title_tokens = [
-        token
-        for token in tokens
-        if 0.44 <= token.center_y <= 0.53
-        and 0.04 <= token.center_x <= 0.96
-        and 2 <= len(token.text.replace(" ", "")) <= 12
-    ]
-    for title in title_tokens:
+    for card in _reward_cards(tokens):
+        if not card.title:
+            continue
         description = "".join(
             token.text.replace(" ", "")
-            for token in sorted(tokens, key=lambda item: item.center_y)
-            if abs(token.center_x - title.center_x) <= 0.09
-            and 0.52 <= token.center_y <= 0.62
+            for token in sorted(
+                card.tokens,
+                key=lambda item: item.center_y,
+            )
+            if 0.52 <= token.center_y <= 0.62
         )
         match = re.search(
             r"立刻获得(\d{1,2})个.*(?:加工品|零件)",
             description,
         )
         if match:
-            effects.append((title.text.strip(), int(match.group(1))))
+            effects.append((card.title, int(match.group(1))))
     return tuple(dict.fromkeys(effects))
 
 
@@ -308,15 +362,11 @@ def _reward_names(tokens: tuple[OCRToken, ...]) -> tuple[str, ...]:
         "总估价",
     }
     names: list[str] = []
-    for token in tokens:
-        text = token.text.strip()
+    for card in _reward_cards(tokens):
+        text = card.title
+        if not text:
+            continue
         compact = text.replace(" ", "")
-        # Card titles occupy one stable horizontal band. Restricting to it
-        # keeps effect descriptions out of the offered-reward list.
-        if not (0.44 <= token.center_y <= 0.53):
-            continue
-        if not (0.04 <= token.center_x <= 0.96):
-            continue
         if compact in ignored or "收下" in compact:
             continue
         if len(compact) < 2 or len(compact) > 12:

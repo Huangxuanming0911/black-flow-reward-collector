@@ -83,6 +83,9 @@ class PendingBattle:
     unowned_wealth_ingots: int | None = None
     reward_tickets: int | None = None
     reward_ticket_names: list[str] = field(default_factory=list)
+    reward_ticket_name_counts: dict[str, int] = field(
+        default_factory=dict
+    )
     reward_collectibles: int | None = None
     parts_box_start: int | None = None
     parts_box_end: int | None = None

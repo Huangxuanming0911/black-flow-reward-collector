@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 import time
@@ -178,13 +179,20 @@ class BattleSessionTracker:
                 pending.reward_tickets or 0,
                 observation.reward_tickets,
             )
-        for name in observation.reward_ticket_names:
+        observed_ticket_counts = Counter(
+            observation.reward_ticket_names
+        )
+        for name, count in observed_ticket_counts.items():
             if name not in pending.reward_ticket_names:
                 pending.reward_ticket_names.append(name)
-        if pending.reward_ticket_names:
+            pending.reward_ticket_name_counts[name] = max(
+                pending.reward_ticket_name_counts.get(name, 0),
+                count,
+            )
+        if pending.reward_ticket_name_counts:
             pending.reward_tickets = max(
                 pending.reward_tickets or 0,
-                len(pending.reward_ticket_names),
+                sum(pending.reward_ticket_name_counts.values()),
             )
         if observation.reward_collectibles is not None:
             pending.reward_collectibles = max(
